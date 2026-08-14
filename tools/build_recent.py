@@ -1,14 +1,26 @@
 #!/usr/bin/env python3
-"""Build the bounded, self-contained projection used by the landing page.
+"""Build the bounded, self-contained projections used by the landing page.
 
 `recent.json` names the newest current versions without making a browser read
 the registry.  Each row is also everything the landing card renders, so the
 browser does not turn a bounded page into one record request per result.
 
-The projection is not another record.  It is rebuilt from canonical, validated
-entries already in the stager's memory; no projected field is read from the
-private index or maintained separately.  Its deliberately small nested objects
-match the parts of a record the card consumes and nothing else.
+`recent-renders.json` names the same results again, carrying only the content
+address of each one's Verso rendering.  It is a second document rather than
+three more keys on a card because the landing page reads it lazily, on the
+first hover, and a reader who never hovers should not pay for it.  Keeping it
+separate is also what makes it deployable: both sides of `recent.json` are
+closed shapes, so a key added there is rejected by the site already being
+served, while a document nothing has asked for yet breaks nothing.
+
+Neither projection is another record.  Both are rebuilt from canonical,
+validated entries already in the stager's memory; no projected field is read
+from the private index or maintained separately.  Their deliberately small
+nested objects match the parts of a record the card consumes and nothing else.
+
+The two are built from one selection, and the render document is built from the
+*finished* recent page rather than from the selection again, so they cannot come
+to name different results.
 """
 
 from __future__ import annotations
@@ -23,6 +35,7 @@ from selection import ARXIV_RE, MSC_RE, latest_entries, parsed, published_at, ro
 
 SCHEMA_VERSION = 1
 RECENT_PATH = "recent.json"
+RECENT_RENDERS_PATH = "recent-renders.json"
 # A hard bound, not a page size. Unbounded this is `index.json` again under
 # another name: the one served object whose size is the registry's, fetched by
 # every visitor. The cap keeps the newest, because a page of what is new that
@@ -34,6 +47,8 @@ IDENTIFIER_RE = re.compile(r"PALOMAR-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{6}")
 REPOSITORY_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 ARCHIVE_REPOSITORY_RE = re.compile(r"PalomarArchive/[A-Za-z0-9_.-]+")
 COMMIT_RE = re.compile(r"[0-9a-f]{40}")
+TREE_HASH_RE = re.compile(r"[0-9a-f]{64}")
+RENDER_ROW_KEYS = {"id", "version", "artifact_tree_sha256"}
 ROW_KEYS = {
     "abstract",
     "authors",
@@ -57,8 +72,9 @@ def validate_entry_schema_for_recent(schema: object, name: str) -> None:
 
     Canonical entries are still validated by jsonschema. This is deliberately
     not another entry validator: it makes the small structural dependency of
-    `row` explicit, so making a projected field optional in a future canonical
-    schema fails publication instead of becoming a late KeyError.
+    `row` and `render_hash` explicit, so making a projected field optional in a
+    future canonical schema fails publication instead of becoming a late
+    KeyError.
     """
     def at(path: tuple[str, ...]) -> dict[str, Any]:
         node = schema
@@ -74,12 +90,13 @@ def validate_entry_schema_for_recent(schema: object, name: str) -> None:
         (): {
             "id", "version", "status", "title", "abstract", "authors",
             "classification", "formalization", "trust", "source", "registered_at",
-            "preservation",
+            "preservation", "challenge_render",
         },
         ("properties", "authors", "items"): {"name"},
         ("properties", "classification"): {"arxiv", "msc2020"},
         ("properties", "formalization"): {"theorem_names"},
         ("properties", "trust"): {"level"},
+        ("properties", "challenge_render"): {"artifact_tree_sha256"},
         ("properties", "source"): {"repository", "commit"},
         ("properties", "preservation"): {"repositories"},
         (
@@ -160,9 +177,50 @@ def row(entry: dict[str, Any], versions: int) -> dict[str, Any]:
     }
 
 
-def _string(value: object, where: str, *, nonempty: bool = True) -> str:
+def render_hash(entry: dict[str, Any]) -> str:
+    """The one part of a record's rendering the landing page needs to frame it.
+
+    Not the whole `challenge_render`. The artifact path is derivable from the
+    identifier, the version and this hash, and the format and entrypoint are
+    constants the browser asserts rather than reads, so publishing them per row
+    would be publishing the same two strings two hundred times.
+    """
+    return entry["challenge_render"]["artifact_tree_sha256"]
+
+
+def render_page(
+    page: list[dict[str, Any]], hashes: dict[tuple[str, int], str]
+) -> list[dict[str, Any]]:
+    """The render hashes of exactly the results on a finished recent page.
+
+    Built from the page rather than from the selection that produced it, so the
+    two documents cannot come to disagree about which results they describe. A
+    row on the page whose hash is not to hand is refused rather than dropped:
+    silently omitting one publishes a landing page whose hover does nothing for
+    a result, with nothing anywhere saying why.
+    """
+    rows = []
+    for item in page:
+        key = (item["id"], item["version"])
+        if key not in hashes:
+            raise ValueError(
+                f"{RECENT_RENDERS_PATH}: no render hash for {key[0]}-v{key[1]}"
+            )
+        rows.append(
+            {"id": key[0], "version": key[1], "artifact_tree_sha256": hashes[key]}
+        )
+    # Identifier order, not the page's newest-first order. One row per result
+    # here as there, so ordering by identifier is total, and a document whose
+    # order is a function of its own rows can be checked without the page.
+    rows.sort(key=lambda item: item["id"])
+    return rows
+
+
+def _string(
+    value: object, where: str, *, nonempty: bool = True, document: str = RECENT_PATH
+) -> str:
     if not isinstance(value, str) or (nonempty and not value):
-        raise ValueError(f"{RECENT_PATH}: {where} must be a string")
+        raise ValueError(f"{document}: {where} must be a string")
     return value
 
 
@@ -180,9 +238,11 @@ def _strings(value: object, where: str, *, pattern: re.Pattern[str] | None = Non
     return result
 
 
-def _exact(value: object, keys: set[str], where: str) -> dict[str, Any]:
+def _exact(
+    value: object, keys: set[str], where: str, *, document: str = RECENT_PATH
+) -> dict[str, Any]:
     if not isinstance(value, dict) or set(value) != keys:
-        raise ValueError(f"{RECENT_PATH}: {where} has an invalid shape")
+        raise ValueError(f"{document}: {where} has an invalid shape")
     return value
 
 
@@ -287,6 +347,57 @@ def validate_recent(document: object) -> dict[str, Any]:
     return page
 
 
+def validate_recent_renders(document: object) -> dict[str, Any]:
+    """Validate the complete public contract, including its semantic bounds."""
+    where_doc = RECENT_RENDERS_PATH
+    page = _exact(document, {"schema_version", "renders"}, "document", document=where_doc)
+    if (
+        type(page["schema_version"]) is not int
+        or page["schema_version"] != SCHEMA_VERSION
+    ):
+        raise ValueError(f"{where_doc}: unsupported schema version")
+    renders = page["renders"]
+    if not isinstance(renders, list) or len(renders) > RECENT_ITEMS:
+        raise ValueError(f"{where_doc}: renders exceeds its {RECENT_ITEMS}-row bound")
+
+    previous = ""
+    for position, value in enumerate(renders):
+        where = f"renders[{position}]"
+        item = _exact(value, RENDER_ROW_KEYS, where, document=where_doc)
+        identifier = _string(item["id"], f"{where}.id", document=where_doc)
+        if not IDENTIFIER_RE.fullmatch(identifier):
+            raise ValueError(f"{where_doc}: {where}.id is malformed")
+        # Strictly increasing, which is distinctness and a canonical order in
+        # one rule. One row per result, as on the page this accompanies, so a
+        # repeated identifier means this is not the projection it says it is.
+        if identifier <= previous:
+            raise ValueError(f"{where_doc}: renders are not in increasing identifier order")
+        previous = identifier
+        version = item["version"]
+        if not isinstance(version, int) or isinstance(version, bool) or version < 1:
+            raise ValueError(f"{where_doc}: {where}.version is invalid")
+        tree = _string(
+            item["artifact_tree_sha256"],
+            f"{where}.artifact_tree_sha256",
+            document=where_doc,
+        )
+        if not TREE_HASH_RE.fullmatch(tree):
+            raise ValueError(f"{where_doc}: {where}.artifact_tree_sha256 is malformed")
+    return page
+
+
+def write_recent_renders(
+    output: pathlib.Path, renders: list[dict[str, Any]]
+) -> pathlib.Path:
+    document = validate_recent_renders(
+        {"schema_version": SCHEMA_VERSION, "renders": renders}
+    )
+    target = output / RECENT_RENDERS_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return target
+
+
 def write_recent(output: pathlib.Path, page: list[dict[str, Any]]) -> pathlib.Path:
     document = validate_recent({"schema_version": SCHEMA_VERSION, "entries": page})
     target = output / RECENT_PATH
@@ -295,11 +406,16 @@ def write_recent(output: pathlib.Path, page: list[dict[str, Any]]) -> pathlib.Pa
     return target
 
 
-def build_recent(output: pathlib.Path, entries: list[dict[str, Any]]) -> pathlib.Path:
+def build_recent(
+    output: pathlib.Path, entries: list[dict[str, Any]]
+) -> tuple[pathlib.Path, pathlib.Path]:
     """Build from every validated active version already read by the stager."""
     versions = collections.Counter(str(entry["id"]) for entry in entries)
-    page = [
-        row(entry, versions[str(entry["id"])])
-        for entry in latest_entries(entries)[:RECENT_ITEMS]
-    ]
-    return write_recent(output, page)
+    current = latest_entries(entries)[:RECENT_ITEMS]
+    page = [row(entry, versions[str(entry["id"])]) for entry in current]
+    hashes = {
+        (entry["id"], entry["version"]): render_hash(entry) for entry in current
+    }
+    return write_recent(output, page), write_recent_renders(
+        output, render_page(page, hashes)
+    )

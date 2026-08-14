@@ -18,7 +18,12 @@ import registration_projection
 import release_delta
 from build_browse import build_browse
 from build_feeds import build_feeds
-from build_recent import RECENT_PATH, build_recent, validate_entry_schema_for_recent
+from build_recent import (
+    RECENT_PATH,
+    RECENT_RENDERS_PATH,
+    build_recent,
+    validate_entry_schema_for_recent,
+)
 from build_search import build_search, head_paths, page_paths, patch_search
 from build_subjects import build_subjects
 from entry_validation import (
@@ -32,7 +37,7 @@ from entry_validation import (
 from takedowns import committed_manifest_blob, load_takedowns, manifest_blob
 
 IMMUTABLE_PREFIXES = ("entries/", "renders/", "evidence/")
-STABLE_PATHS = ("feed.xml", RECENT_PATH)
+STABLE_PATHS = ("feed.xml", RECENT_PATH, RECENT_RENDERS_PATH)
 UNKEYED = ("index.json", "release-delta.json")
 FULL_REBUILD_INPUTS = frozenset(
     {

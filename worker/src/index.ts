@@ -29,7 +29,7 @@ const PUBLIC_PATHS = [
   // No whole-registry index. `index.json` is a staging intermediate the other
   // surfaces are derived from, is not part of a release, and is not served:
   // it was the one served object whose size was the registry's.
-  /^\/(?:feed\.xml|recent\.json|source-availability(?:-targets)?\.json|LICENSE)$/,
+  /^\/(?:feed\.xml|recent(?:-renders)?\.json|source-availability(?:-targets)?\.json|LICENSE)$/,
   /^\/schema-v2\.json$/,
   new RegExp(`^/entries/${VERSIONED}\\.json$`),
   new RegExp(`^/tombstones/${VERSIONED}\\.json$`),
@@ -83,7 +83,8 @@ const IMMUTABLE_PREFIXES = ["/entries/", "/renders/", "/evidence/"];
  * run briefly ahead of or behind the rest of the release, which is what an RSS
  * reader assumes anyway; in exchange, one new entry rewrites the handful of
  * categories it belongs to instead of every category under a fresh release
- * prefix. `recent.json` is the same bargain for the landing page. Tombstones
+ * prefix. `recent.json` is the same bargain for the landing page, and
+ * `recent-renders.json` is rewritten with it. Tombstones
  * also stay at stable keys, but are written only by a full takedown/restoration
  * release; ordinary accepted releases leave historical tombstones untouched.
  */
@@ -92,6 +93,7 @@ const STABLE_PATHS = [
   "/source-availability-targets.json",
   "/feed.xml",
   "/recent.json",
+  "/recent-renders.json",
 ];
 const STABLE_PREFIXES = [
   "/browse/",

@@ -476,7 +476,7 @@ SURFACE_PREFIXES = (
     "registration-identities/",
     "repositories/",
 )
-SURFACE_PATHS = ("recent.json", "feed.xml")
+SURFACE_PATHS = ("recent.json", "recent-renders.json", "feed.xml")
 
 
 def surfaces(site: pathlib.Path) -> dict[str, bytes]:

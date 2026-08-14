@@ -422,10 +422,10 @@ def test_workflows_pin_the_handoff_and_keep_whole_sweeps_off_the_success_path():
     publish = (root / ".github/workflows/publish.yml").read_text()
     health = (root / ".github/workflows/publish-health.yml").read_text()
 
-    assert "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02" in publish
+    assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in publish
     assert "retention-days: 1" in publish
     assert "publication-evidence-${{ github.run_id }}-${{ github.run_attempt }}" in publish
-    assert "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093" in health
+    assert "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" in health
     assert "run-id: ${{ github.event.workflow_run.id }}" in health
     assert "github.event.workflow_run.run_attempt" in health
     assert "filter: tree:0" in health

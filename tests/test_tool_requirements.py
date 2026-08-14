@@ -111,7 +111,7 @@ def test_reviewed_inputs_are_the_only_human_edited_requirements():
     assert TEST_INPUT.read_text(encoding="utf-8").splitlines() == [
         "-r requirements-tools.in",
         "pip-audit==2.10.1",
-        "pytest==8.4.1",
+        "pytest==9.0.3",
     ]
 
 
@@ -223,7 +223,7 @@ def test_least_authority_ci_reproduces_and_cold_installs_the_test_closure():
     assert "--require-hashes --no-deps --only-binary=:all:" in workflow
     assert "-r requirements-test.txt" in workflow
     assert "python -m pip check" in workflow
-    assert "pytest==8.4.1" not in workflow
+    assert "pytest==9.0.3" not in workflow
     assert "python -m venv" in workflow
     assert '"$runtime_env/bin/python" -m pip install' in workflow
     assert "--only-binary=:all: -r requirements-tools.txt" in workflow

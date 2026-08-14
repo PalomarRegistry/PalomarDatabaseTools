@@ -23,7 +23,15 @@ Do not put the Cloudflare deployment token in
 `source-availability-production`. That environment is only for the bounded
 availability writer.
 
-Create the Cloudflare API token from
+The Cloudflare dashboard credential used here is named exactly
+**PalomarDatabaseTools GitHub deploy**. It is a separate credential from the
+pre-existing **palomar worker deployment token** used by another deployment
+path. Do not edit, copy, or replace the latter while configuring this
+repository. GitHub stores the value of **PalomarDatabaseTools GitHub deploy** as
+the `CLOUDFLARE_API_TOKEN` secret in this repository's `production`
+environment.
+
+Create or edit **PalomarDatabaseTools GitHub deploy** from
 <https://dash.cloudflare.com/?to=%2F%3Aaccount%2Fapi-tokens>. Cloudflare's
 current custom-token editor requires both **Workers Scripts: Edit** for the
 Palomar account and **Workers Routes: Edit** for the

@@ -45,11 +45,14 @@ printf '%s' "$CLOUDFLARE_API_TOKEN" | gh secret set CLOUDFLARE_API_TOKEN \
 unset CLOUDFLARE_API_TOKEN
 ```
 
-The `production` environment has required reviewers. Dispatch `Deploy
-public-data Worker` with the exact green commit. The workflow verifies that the
-commit belongs to `main`, repeats Worker tests, and deploys both the inert and
-production Worker environments. The similarly named GitHub and Wrangler
-environments are separate concepts.
+The `production` environment accepts only protected branches and does not have
+an interactive approval gate. Every successful `CI` run caused by a push to
+`main` automatically triggers `Deploy public-data Worker` for that exact commit.
+The deployment workflow verifies that the green commit still belongs to `main`
+and deploys both the inert and production Worker environments. It relies on the
+Worker checks and dry-run deployments already completed by `CI` instead of
+repeating them and consuming additional Actions minutes. The similarly named
+GitHub and Wrangler environments are separate concepts.
 
 ## Source-availability writer
 

@@ -1,11 +1,10 @@
 name: Deploy public-data Worker
 
 on:
-  workflow_dispatch:
-    inputs:
-      commit:
-        description: Exact commit to deploy (must be an ancestor of main)
-        required: true
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: read
@@ -16,33 +15,32 @@ concurrency:
 
 jobs:
   deploy:
+    if: >-
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Check out the exact reviewed commit
+      - name: Confirm the green commit is on main
         env:
-          DEPLOY_COMMIT: ${{ inputs.commit }}
+          DEPLOY_COMMIT: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
           git merge-base --is-ancestor "$DEPLOY_COMMIT" origin/main
-          git checkout --detach "$DEPLOY_COMMIT"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22.18.0"
           cache: npm
           cache-dependency-path: worker/package-lock.json
-      - name: Install and recheck the Worker
+      - name: Install the reviewed deployment closure
         working-directory: worker
-        run: |
-          npm ci
-          npm run check
-          npm test
-          npm run test:runtime
+        run: npm ci
       - name: Deploy the inert and production environments
         working-directory: worker
         env:

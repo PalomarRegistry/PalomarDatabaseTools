@@ -60,7 +60,7 @@ jobs:
           (cd "$RUNNER_TEMP/smoke-database" && \
             "$RUNNER_TEMP/runtime/bin/python" -m palomar_database_tools \
               smoke-source-availability)
-      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
         with:
           name: palomar-database-tools-${{ github.sha }}
           path: dist/runtime/

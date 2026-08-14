@@ -94,6 +94,9 @@ jobs:
         env:
           PALOMAR_DATABASE_CHECKOUT: ${{ github.workspace }}/database
           PALOMAR_POLICY_CHECKOUT: ${{ github.workspace }}/policy
+          # The sparse-checkout contract treats every untracked path as input;
+          # interpreter caches must not appear inside the synthetic database.
+          PYTHONDONTWRITEBYTECODE: "1"
           # Reviewer CI itself exercises both capabilities. This job's subject
           # is the database/policy registration contract.
           PALOMAR_TESTS_WITHOUT: sandbox,codex

@@ -21,11 +21,13 @@ from check_source_availability import (
 )
 
 DEFAULT_ORIGIN = "https://data.palomar-registry.org"
+USER_AGENT = "Palomar-source-availability/1"
 
 
 def _read(url: str) -> tuple[object, str | None]:
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
-        with urllib.request.urlopen(url, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=30) as response:
             return json.load(response), response.headers.get("ETag")
     except urllib.error.HTTPError as error:
         if error.code == 404:
@@ -57,7 +59,21 @@ def _targets(value: object) -> tuple[list[dict[str, str]], str]:
 
 
 def _digest(targets: list[dict[str, str]]) -> str:
-    canonical = json.dumps(targets, separators=(",", ":"), ensure_ascii=True).encode() + b"\n"
+    # Match the Worker's explicit AvailabilityTarget construction order. The
+    # target document itself is emitted with sorted object keys, so hashing the
+    # parsed dictionaries directly would accidentally bind the digest to the
+    # producer's presentation order instead of this protocol order.
+    protocol_targets = [
+        {
+            "source_repository": row["source_repository"],
+            "commit": row["commit"],
+            "fork_repository": row["fork_repository"],
+        }
+        for row in targets
+    ]
+    canonical = json.dumps(
+        protocol_targets, separators=(",", ":"), ensure_ascii=True
+    ).encode() + b"\n"
     return hashlib.sha256(canonical).hexdigest()
 
 
@@ -66,6 +82,7 @@ def _put(url: str, token: str, body: bytes, etag: str | None) -> None:
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
         "If-Match" if etag is not None else "If-None-Match": etag or "*",
+        "User-Agent": USER_AGENT,
     }
     request = urllib.request.Request(url, data=body, method="PUT", headers=headers)
     with urllib.request.urlopen(request, timeout=30) as response:

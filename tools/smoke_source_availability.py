@@ -7,10 +7,11 @@ import importlib
 import pathlib
 import sys
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
-TOOLS = ROOT / "tools"
-if str(TOOLS) not in sys.path:
-    sys.path.insert(0, str(TOOLS))
+# This module is installed as a top-level command module. Its own file then
+# lives in site-packages, while the schemas it checks belong to the consumer
+# database checkout. Commands run from that checkout, so the default root is
+# the working directory rather than the package installation directory.
+ROOT = pathlib.Path.cwd()
 
 from entry_validation import ENTRY_SCHEMA_NAME, load_entry_schema
 from score_validation import SCORES_SCHEMA_NAME, load_score_schema

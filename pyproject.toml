@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "palomar-database-tools"
+version = "0.1.0"
+description = "Public, data-independent tooling for Palomar Registry databases"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+  "boto3==1.40.0",
+  "jsonschema[format-nongpl]==4.25.0",
+  "referencing==0.37.0",
+]
+
+[project.scripts]
+palomar-database-tools = "palomar_database_tools.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "tools"}
+py-modules = [
+  "build_browse", "build_feeds", "build_recent", "build_registration_lookups",
+  "build_search", "build_subjects", "bundle_reference_validation",
+  "changed_records", "check_append_only", "check_published",
+  "check_source_availability", "day_pages", "entry_validation",
+  "evidence_validation", "lock_tool_requirements", "patch_surfaces",
+  "publication_evidence", "public_source_availability", "publish_availability",
+  "publish_availability_targets", "publish_snapshot",
+  "registration_projection", "release_delta", "render_validation",
+  "schema_policy", "score_validation", "selection", "smoke_source_availability",
+  "source_availability_contract", "source_availability_targets", "stage_public", "takedowns", "validate",
+  "validation_scope"
+]
+
+[tool.setuptools.packages.find]
+where = ["tools"]
+include = ["palomar_database_tools*"]

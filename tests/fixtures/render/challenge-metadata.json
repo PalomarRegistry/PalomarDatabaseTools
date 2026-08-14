@@ -1,0 +1,13 @@
+{
+  "declarations": [
+    "UnitDistance.erdos_unit_distance_uniform_constant_false"
+  ],
+  "imports": [
+    "Mathlib"
+  ],
+  "module_doc": "# Challenge: the uniform-constant Erd\u0151s unit-distance conjecture is false\n\nThis file is the human-auditable statement.  It imports only Mathlib.\n\nFor a finite `P \u2286 \u211d\u00b2`, `unitDist P` counts unordered pairs of points of\n`P` at Euclidean distance exactly `1` (the metric of\n`EuclideanSpace \u211d (Fin 2)`, not the sup-metric of `\u211d \u00d7 \u211d`).\n\nErd\u0151s (1946) conjectured `\u03bd(n) \u2264 n^(1 + C / log log n)` for some\nabsolute constant `C` and all sufficiently large `n`.  The theorem below\nrefutes this bound: for every `C > 0` there are arbitrarily large\n`n` admitting `n`-point sets with more than `n^(1 + C / log log n)`\nunit-distance pairs (L. Alp\u00f6ge, *Integral points on norm-one tori and\nthe Erd\u0151s unit-distance exponent*, 2026).  Restricting to positive `C`\nis harmless because a bound with `C \u2264 0` would imply one with positive\n`C`.",
+  "schema_version": 2,
+  "solution_imports": [
+    "ErdosUnitDistance"
+  ]
+}

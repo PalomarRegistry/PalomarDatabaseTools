@@ -1,0 +1,909 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://data.palomar-registry.org/schema-v2.json",
+  "title": "Palomar accepted record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "accepted_at",
+    "registered_at",
+    "version",
+    "status",
+    "title",
+    "abstract",
+    "authors",
+    "classification",
+    "provenance",
+    "source",
+    "preservation",
+    "formalization",
+    "verification",
+    "challenge_render",
+    "review",
+    "trust",
+    "submission"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^PALOMAR-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{6}$"
+    },
+    "accepted_at": {
+      "type": "string",
+      "format": "date",
+      "description": "The day the result entered the registry. It belongs to the result rather than to any one version of it: it is the date the identifier carries, it decides the browse page, and every later version inherits it. It is the day part of version 1's registered_at, which the validator checks, because two fields that must agree and are written in different places otherwise drift."
+    },
+    "registered_at": {
+      "$ref": "#/$defs/timestamp",
+      "description": "The moment this version was registered, which is the moment the submitter's consent was acted on. Every ordering surface reads this and nothing else: recent.json, the feeds and the subject pages. It is per version, because a v2 is a new registration and has to sort as news, where accepted_at would put it among its siblings from the year of the v1. It is not review.reviewed_at, which is when the verdict was reached and may be days earlier, since nothing is registered until the submitter has read their review and consented."
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "status": {
+      "const": "accepted"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]*$"
+    },
+    "abstract": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 10000,
+      "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]*$"
+    },
+    "authors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "github": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$"
+          },
+          "orcid": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9X]{4}$"
+          }
+        }
+      }
+    },
+    "classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "arxiv",
+        "msc2020"
+      ],
+      "properties": {
+        "arxiv": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]+(?:-[a-z]+)*(?:\\.[A-Za-z-]+)?$"
+          }
+        },
+        "msc2020": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9]{2}(?:[A-Z][0-9]{2}|-[0-9]{2})$"
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_origin",
+        "repository_role",
+        "responsible_maintainers",
+        "mathematical_sources",
+        "related_formalizations"
+      ],
+      "properties": {
+        "result_origin": {
+          "enum": [
+            "original",
+            "source-based"
+          ]
+        },
+        "repository_role": {
+          "enum": [
+            "substantive-development",
+            "thin-wrapper"
+          ]
+        },
+        "responsible_maintainers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/person"
+          }
+        },
+        "substantive_formalization": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repository",
+            "repository_url",
+            "commit",
+            "tree_url"
+          ],
+          "properties": {
+            "repository": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+            },
+            "repository_url": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://github\\.com/"
+            },
+            "commit": {
+              "$ref": "#/$defs/sha"
+            },
+            "tree_url": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://github\\.com/.+/tree/[0-9a-f]{40}$"
+            }
+          }
+        },
+        "mathematical_sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title",
+              "authors",
+              "relationship"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 10000
+              },
+              "authors": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/person"
+                }
+              },
+              "relationship": {
+                "enum": [
+                  "formalizes",
+                  "adapts",
+                  "independently-proves",
+                  "background",
+                  "other"
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              },
+              "type": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "location": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "license": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "author_endorsement": {
+                "enum": [
+                  "participated",
+                  "endorsed",
+                  "no-response",
+                  "not-contacted",
+                  "declined",
+                  "n/a"
+                ]
+              }
+            }
+          }
+        },
+        "related_formalizations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "identifier",
+              "relationship"
+            ],
+            "properties": {
+              "identifier": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              },
+              "relationship": {
+                "enum": [
+                  "builds-on",
+                  "adapts",
+                  "independent",
+                  "supersedes",
+                  "other"
+                ]
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 10000
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "result_origin": {
+                "const": "source-based"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "mathematical_sources": {
+                "contains": {
+                  "properties": {
+                    "relationship": {
+                      "enum": [
+                        "formalizes",
+                        "adapts",
+                        "independently-proves"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "relationship"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "result_origin": {
+                "const": "original"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "mathematical_sources": {
+                "items": {
+                  "properties": {
+                    "relationship": {
+                      "enum": [
+                        "background",
+                        "other"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "repository_role": {
+                "const": "thin-wrapper"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "substantive_formalization"
+            ]
+          }
+        }
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "repository_url",
+        "commit",
+        "tree_url",
+        "license"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "repository_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://github\\.com/"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "tree_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://github\\.com/.+/tree/[0-9a-f]{40}(?:/.+)?$",
+          "description": "Commit-pinned GitHub tree URL for the selected project directory; repository root when project_path is absent."
+        },
+        "project_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Canonical repository-root-relative POSIX path of the selected Lean project. URL segments in tree_url use RFC 3986 percent encoding."
+        },
+        "license": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256",
+            "declared_identifier",
+            "detected_identifier"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[^/\\\\]+$"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "declared_identifier": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "detected_identifier": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        }
+      }
+    },
+    "preservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "archive_owner",
+        "archived_at",
+        "receipt_sha256",
+        "repositories"
+      ],
+      "properties": {
+        "archive_owner": {
+          "const": "PalomarArchive"
+        },
+        "archived_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "receipt_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "repositories": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "source_repository",
+              "commit",
+              "fork_repository",
+              "ref"
+            ],
+            "properties": {
+              "source_repository": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+              },
+              "commit": {
+                "$ref": "#/$defs/sha"
+              },
+              "fork_repository": {
+                "type": "string",
+                "pattern": "^PalomarArchive/[A-Za-z0-9_.-]+$"
+              },
+              "ref": {
+                "type": "string",
+                "pattern": "^refs/tags/palomar/PALOMAR-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{6}-v[1-9][0-9]*/[0-9a-f]{40}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "formalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lean_toolchain",
+        "challenge_path",
+        "solution_path",
+        "comparator_config_path",
+        "formalization_metadata_path",
+        "lakefile_path",
+        "project_dependencies",
+        "theorem_names",
+        "definition_names",
+        "permitted_axioms"
+      ],
+      "properties": {
+        "lean_toolchain": {
+          "type": "string",
+          "pattern": "^leanprover/lean4:"
+        },
+        "challenge_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Repository-root-relative path inside the selected project."
+        },
+        "solution_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Repository-root-relative path inside the selected project."
+        },
+        "comparator_config_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Repository-root-relative path inside the selected project."
+        },
+        "formalization_metadata_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Repository-root-relative metadata path; it may remain at repository root for a nested Comparator project."
+        },
+        "lakefile_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Repository-root-relative Lakefile path at the root of the selected project."
+        },
+        "project_dependencies": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "repository",
+                  "revision"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "repository": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+                  },
+                  "revision": {
+                    "$ref": "#/$defs/sha"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "path"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "description": "Canonical repository-root-relative dependency directory; '.' names repository root."
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "theorem_names": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "definition_names": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "permitted_axioms": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "propext",
+              "Quot.sound",
+              "Classical.choice"
+            ]
+          }
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "challenge_sha256",
+        "comparator_commit",
+        "evidence_path",
+        "evidence_tree_sha256",
+        "landrun_commit",
+        "lean4export_commit",
+        "mechanical_report_sha256",
+        "nanoda_commit",
+        "repository",
+        "run_id",
+        "solution_sha256",
+        "verified_at",
+        "workflow_commit",
+        "workflow_path",
+        "workflow_run_attempt",
+        "workflow_url"
+      ],
+      "properties": {
+        "verified_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "workflow_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "workflow_commit": {
+          "$ref": "#/$defs/sha"
+        },
+        "workflow_run_attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "evidence_path": {
+          "type": "string",
+          "pattern": "^evidence/PALOMAR-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{6}-v[1-9][0-9]*/[0-9a-f]{64}/$"
+        },
+        "evidence_tree_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "mechanical_report_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "comparator_commit": {
+          "$ref": "#/$defs/sha"
+        },
+        "lean4export_commit": {
+          "$ref": "#/$defs/sha"
+        },
+        "landrun_commit": {
+          "$ref": "#/$defs/sha"
+        },
+        "nanoda_commit": {
+          "$ref": "#/$defs/sha"
+        },
+        "challenge_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "solution_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "repository": {
+          "const": "PalomarRegistry/PalomarSubmission"
+        },
+        "run_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "workflow_path": {
+          "const": ".github/workflows/submission.yml"
+        }
+      }
+    },
+    "challenge_render": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "artifact_path",
+        "entrypoint",
+        "artifact_tree_sha256",
+        "verso_commit",
+        "renderer_commit",
+        "landrun_commit",
+        "rendered_at"
+      ],
+      "properties": {
+        "format": {
+          "const": "verso-html"
+        },
+        "artifact_path": {
+          "type": "string",
+          "pattern": "^renders/PALOMAR-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{6}-v[1-9][0-9]*/[0-9a-f]{64}/$"
+        },
+        "entrypoint": {
+          "const": "Challenge/index.html"
+        },
+        "artifact_tree_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "verso_commit": {
+          "$ref": "#/$defs/sha"
+        },
+        "renderer_commit": {
+          "$ref": "#/$defs/sha"
+        },
+        "landrun_commit": {
+          "$ref": "#/$defs/sha"
+        },
+        "rendered_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The review that decided this version. The scores behind the verdict are not here, and are not published: the same repository at the same commit has scored 5 and then 4 on the same axis across two runs of the same policy, so the numbers do not mean what a reader would take them to mean. They are recorded beside the database, under scores/, so the decision stays reconstructable. The verdict they produced is here, and it is stable.",
+      "required": [
+        "reviewed_at",
+        "policy_commit",
+        "verdict",
+        "reviewer_models",
+        "warnings",
+        "report"
+      ],
+      "properties": {
+        "reviewed_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "policy_commit": {
+          "$ref": "#/$defs/sha"
+        },
+        "verdict": {
+          "const": "accept"
+        },
+        "reviewer_models": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/text"
+          }
+        },
+        "report": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sha256"
+          ],
+          "properties": {
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "source_url": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        }
+      }
+    },
+    "trust": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "level",
+        "challenge_lines",
+        "challenge_bytes",
+        "challenge_imports",
+        "challenge_dependencies",
+        "reasons"
+      ],
+      "properties": {
+        "level": {
+          "enum": [
+            "high",
+            "qualified"
+          ]
+        },
+        "challenge_lines": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "challenge_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "challenge_imports": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "challenge_dependencies": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "repository",
+              "provenance"
+            ],
+            "properties": {
+              "repository": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+              },
+              "provenance": {
+                "enum": [
+                  "allowlisted"
+                ]
+              }
+            }
+          }
+        },
+        "reasons": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/text"
+          }
+        }
+      }
+    },
+    "submission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "submission_id",
+        "authorization"
+      ],
+      "properties": {
+        "submission_id": {
+          "type": "string",
+          "pattern": "^[0-9a-z]{12}$"
+        },
+        "authorization": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "relationship"
+          ],
+          "properties": {
+            "relationship": {
+              "enum": [
+                "maintainer",
+                "approved"
+              ]
+            },
+            "evidence": {
+              "$ref": "#/$defs/text"
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "person": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "github": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$"
+        },
+        "orcid": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9X]{4}$"
+        }
+      }
+    },
+    "sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]*$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    }
+  }
+}

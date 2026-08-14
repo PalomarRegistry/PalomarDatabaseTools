@@ -1,0 +1,53 @@
+name: Public source availability
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-source-availability
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: source-availability-production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11.10"
+      - name: Refresh and conditionally publish the public manifest
+        id: refresh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PALOMAR_AVAILABILITY_UPDATE_TOKEN: ${{ secrets.PALOMAR_AVAILABILITY_UPDATE_TOKEN }}
+        run: |
+          set +e
+          python tools/public_source_availability.py \
+            --output "$RUNNER_TEMP/source-availability.json"
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ] && [ "$code" -ne 3 ]; then
+            exit "$code"
+          fi
+          echo "archive_degraded=$([ "$code" -eq 3 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4
+        if: always()
+        with:
+          name: source-availability-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/source-availability.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Report archive degradation
+        if: steps.refresh.outputs.archive_degraded == 'true'
+        run: |
+          echo "At least one preserved commit is unavailable from PalomarArchive." >&2
+          exit 1

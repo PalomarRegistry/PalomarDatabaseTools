@@ -1,0 +1,96 @@
+{
+  "artifact_tree_sha256": "559040e70ab9bf424b1cdedd94467c716e49af478eae36f83f30c2348ddbab97",
+  "files": [
+    {
+      "bytes": 13879,
+      "path": "-verso-docs.json",
+      "sha256": "a78b5a188e7aeaf4bb3338215860e02cb24d385c1f1ab393eedc428046b03f3d"
+    },
+    {
+      "bytes": 4716,
+      "path": "-verso-search/README.txt",
+      "sha256": "c2592e93a155651c869ea357d9b4c8bbd28920eb841b6a7c984841fd5fe9993a"
+    },
+    {
+      "bytes": 209,
+      "path": "-verso-search/domain-display.css",
+      "sha256": "70a88a17f590dc105d7505a27b031e70addf1cc9cc71b846c6c4c672a03a1f09"
+    },
+    {
+      "bytes": 120,
+      "path": "-verso-search/domain-mappers.d.ts",
+      "sha256": "b347aa85cd1497191ce7e7166ef113e7c4c83f79345a6a4f7816a2155a5f7665"
+    },
+    {
+      "bytes": 2845,
+      "path": "-verso-search/fuzzysort.d.ts",
+      "sha256": "7c3f3de27ad6eb8ab420f1aade753483e1a597820ff7b5d80fa210e1c6f7c4e5"
+    },
+    {
+      "bytes": 205,
+      "path": "-verso-search/jsconfig.json",
+      "sha256": "a5631cd615d28299f6615448ff44263110b8663f7f55edb51f0d32236f401126"
+    },
+    {
+      "bytes": 2274,
+      "path": "-verso-search/licenses.md",
+      "sha256": "437e3dad49ac48ebfeabcaaf4c020b6580b13690b24ca0c5b31e4f3c797b0e43"
+    },
+    {
+      "bytes": 7610,
+      "path": "-verso-search/search-box.css",
+      "sha256": "f7c742f4b6439d1f4b027a4da1f22994939d7b34f5af6e2a260fc03497003a5e"
+    },
+    {
+      "bytes": 1905,
+      "path": "-verso-search/search-highlight.css",
+      "sha256": "b99e8b97d255b99dd1b56320227d0ce44a947e87696d424200082911df8fc8fc"
+    },
+    {
+      "bytes": 4625,
+      "path": "-verso-search/search-page.css",
+      "sha256": "6a1bd3425d469a7149ecef343ca9b339a765efcefca694787f7d57899ca40912"
+    },
+    {
+      "bytes": 40771,
+      "path": "Challenge/index.html",
+      "sha256": "620c53915276a2cd0f72984c41f2965256db30f3f13f32925077428662a7aeb0"
+    },
+    {
+      "bytes": 1125,
+      "path": "challenge-metadata.json",
+      "sha256": "e04b2850a4034eccb9ef6e251b633c59ee69807ad07885783875b25b4b8077a9"
+    },
+    {
+      "bytes": 7026,
+      "path": "code.css",
+      "sha256": "791b203b77e466c48504f32e5c794ecfbfa21d262bcabcd4a080f97194cfe529"
+    },
+    {
+      "bytes": 2079,
+      "path": "palomar-sanitize.js",
+      "sha256": "d15fb1c3eca7a3eb32293cff66a913301c25fb03706004a0e27319b631c6ff60"
+    },
+    {
+      "bytes": 6581,
+      "path": "palomar-verso.js",
+      "sha256": "a44bf5ebef846fc69009c02d5617e5af1a2d70d26298ea6db4a20600cead5201"
+    },
+    {
+      "bytes": 17196,
+      "path": "search/index.html",
+      "sha256": "16b95c698eabf02d3db688199402d965f054723aaa1d55d6ef576a8ff82823f2"
+    },
+    {
+      "bytes": 1031,
+      "path": "tippy-border.css",
+      "sha256": "bd2dc7de7b0177047251280a8331b7d97ed750ea00004e69981fc7de517da995"
+    },
+    {
+      "bytes": 653,
+      "path": "xref.json",
+      "sha256": "303d4e47fbfb620d72688e926cc725236091c988bee709559c0c08df8043dbd8"
+    }
+  ],
+  "schema_version": 1
+}

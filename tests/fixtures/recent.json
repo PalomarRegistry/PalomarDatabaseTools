@@ -1,0 +1,50 @@
+{
+  "entries": [
+    {
+      "abstract": "For every C > 0 and every N there exist n ≥ N and an n-point set P ⊆ ℝ² whose number of unit-distance pairs exceeds n^(1 + C / log log n). This refutes Erdős's 1946 conjectured bound ν(n) ≤ n^(1 + C/log log n) for an absolute constant C. The theorem quantifies over C > 0; this is harmless because any bound with C ≤ 0 would imply the corresponding bound for a positive C.\n",
+      "authors": [
+        {
+          "name": "Kim Morrison"
+        }
+      ],
+      "classification": {
+        "arxiv": [
+          "math.NT"
+        ],
+        "msc2020": [
+          "11N13"
+        ]
+      },
+      "formalization": {
+        "theorem_names": [
+          "UnitDistance.erdos_unit_distance_uniform_constant_false"
+        ]
+      },
+      "id": "PALOMAR-2026-08-05-419273",
+      "path": "entries/PALOMAR-2026-08-05-419273-v3.json",
+      "preservation": {
+        "repositories": [
+          {
+            "commit": "49cc9dd72a12c3b324957a9f2f965237ef0fea05",
+            "fork_repository": "PalomarArchive/fixture",
+            "source_repository": "kim-em/erdos-unit-distance-comparator"
+          }
+        ]
+      },
+      "published_at": "2026-07-29T09:14:07Z",
+      "source": {
+        "commit": "49cc9dd72a12c3b324957a9f2f965237ef0fea05",
+        "project_path": null,
+        "repository": "kim-em/erdos-unit-distance-comparator"
+      },
+      "status": "accepted",
+      "title": "Uniform-constant Erdős unit-distance conjecture is false",
+      "trust": {
+        "level": "high"
+      },
+      "version": 3,
+      "versions": 3
+    }
+  ],
+  "schema_version": 1
+}

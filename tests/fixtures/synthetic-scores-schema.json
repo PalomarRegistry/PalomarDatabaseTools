@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/synthetic-scores-v1.json",
+  "title": "Synthetic private-score fixture",
+  "description": "Invented closed schema used only to test the generic validator.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "version",
+    "reviewed_at",
+    "policy_commit",
+    "scores"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^PALOMAR-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{6}$"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "reviewed_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "policy_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "scores": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "statement_alignment",
+        "definition_fidelity",
+        "notability",
+        "literature",
+        "clarity"
+      ],
+      "properties": {
+        "statement_alignment": {
+          "$ref": "#/$defs/score"
+        },
+        "definition_fidelity": {
+          "$ref": "#/$defs/score"
+        },
+        "notability": {
+          "$ref": "#/$defs/score"
+        },
+        "literature": {
+          "$ref": "#/$defs/score"
+        },
+        "clarity": {
+          "$ref": "#/$defs/score"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "score": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5
+    }
+  }
+}

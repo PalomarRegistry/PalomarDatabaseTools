@@ -1,0 +1,48 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "palomar-data-staging",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-08",
+  "compatibility_flags": ["nodejs_compat"],
+  // This top-level environment is deliberately inert: CI uses it for generated
+  // types and a dry run, but it has no route, hostname or preview URL. Wrangler
+  // deploys environments separately, so a reviewed Worker change must apply
+  // both this root environment and `--env production` to keep them aligned.
+  "workers_dev": false,
+  "preview_urls": false,
+  // The dedicated staging bucket is empty and must stay outside the publisher.
+  // Even a mistakenly exposed root Worker must therefore have no registry data
+  // to serve. After every publication and once daily,
+  // `check_published.py --second-front-doors-only` verifies that neither
+  // Worker-name-derived `workers.dev` hostname serves the schema.
+  "r2_buckets": [
+    {
+      "binding": "DATA",
+      "bucket_name": "palomar-public-data-staging"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "env": {
+    "production": {
+      "name": "palomar-data",
+      // The production bucket is reachable only through this custom domain.
+      "workers_dev": false,
+      "preview_urls": false,
+      "routes": [
+        {
+          "pattern": "data.palomar-registry.org",
+          "custom_domain": true
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "DATA",
+          "bucket_name": "palomar-public-data"
+        }
+      ]
+    }
+  }
+}

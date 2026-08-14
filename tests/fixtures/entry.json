@@ -1,0 +1,453 @@
+{
+  "schema_version": 2,
+  "id": "PALOMAR-2026-08-05-419273",
+  "accepted_at": "2026-07-29",
+  "registered_at": "2026-07-29T09:14:07Z",
+  "version": 3,
+  "status": "accepted",
+  "title": "Uniform-constant Erd\u0151s unit-distance conjecture is false",
+  "abstract": "For every C > 0 and every N there exist n \u2265 N and an n-point set P \u2286 \u211d\u00b2 whose number of unit-distance pairs exceeds n^(1 + C / log log n). This refutes Erd\u0151s's 1946 conjectured bound \u03bd(n) \u2264 n^(1 + C/log log n) for an absolute constant C. The theorem quantifies over C > 0; this is harmless because any bound with C \u2264 0 would imply the corresponding bound for a positive C.\n",
+  "authors": [
+    {
+      "name": "Kim Morrison"
+    }
+  ],
+  "classification": {
+    "arxiv": [
+      "math.NT"
+    ],
+    "msc2020": [
+      "11N13"
+    ]
+  },
+  "provenance": {
+    "mathematical_sources": [
+      {
+        "authors": [
+          {
+            "name": "Levent Alp\u00f6ge"
+          }
+        ],
+        "identifier": "git:github.com/kim-em/erdos-unit-distance@34b4587bbd0740efb9c06a519a8ee14a3eff8cd7:informal-proof.md",
+        "relationship": "other",
+        "title": "Integral points on norm-one tori and the Erd\u0151s unit-distance exponent"
+      },
+      {
+        "authors": [
+          {
+            "name": "Levent Alp\u00f6ge"
+          }
+        ],
+        "identifier": "anthropic:ca35f196125c899a5ad11f011080202a652aef02",
+        "relationship": "other",
+        "title": "Integral points on norm-one tori and the Erd\u0151s unit-distance exponent"
+      },
+      {
+        "authors": [
+          {
+            "name": "Junyan Xu"
+          }
+        ],
+        "identifier": "https://leanprover.zulipchat.com/#narrow/channel/219941-Machine-Learning-for-Theorem-Proving/topic/Logical.20Intelligence.20partial.20proof.20of.20unit.20distance.20result/near/601574339",
+        "relationship": "other",
+        "title": "Lean Zulip discussion of the unit-distance result"
+      },
+      {
+        "authors": [
+          {
+            "name": "Paul Erd\u0151s"
+          }
+        ],
+        "identifier": "journal:Amer.Math.Monthly.53.1946.248-250",
+        "relationship": "other",
+        "title": "On sets of distances of n points"
+      },
+      {
+        "authors": [
+          {
+            "name": "Joel Spencer"
+          },
+          {
+            "name": "Endre Szemer\u00e9di"
+          },
+          {
+            "name": "William T. Trotter"
+          }
+        ],
+        "identifier": "bibliographic:Spencer-Szemeredi-Trotter-1984-293-303",
+        "relationship": "other",
+        "title": "Unit distances in the Euclidean plane"
+      },
+      {
+        "authors": [
+          {
+            "name": "OpenAI"
+          }
+        ],
+        "identifier": "https://cdn.openai.com/pdf/74c24085-19b0-4534-9c90-465b8e29ad73/unit-distance-proof.pdf",
+        "relationship": "other",
+        "title": "Planar Point Sets with Many Unit Distances"
+      },
+      {
+        "authors": [
+          {
+            "name": "Noga Alon"
+          },
+          {
+            "name": "Thomas Bloom"
+          },
+          {
+            "name": "William T. Gowers"
+          },
+          {
+            "name": "Daniel Litt"
+          },
+          {
+            "name": "Will Sawin"
+          },
+          {
+            "name": "Arul Shankar"
+          },
+          {
+            "name": "Jacob Tsimerman"
+          },
+          {
+            "name": "Victor Wang"
+          },
+          {
+            "name": "Melanie Matchett Wood"
+          }
+        ],
+        "identifier": "arXiv:2605.20695",
+        "relationship": "other",
+        "title": "Remarks on the disproof of the unit distance conjecture"
+      },
+      {
+        "authors": [
+          {
+            "name": "PrimeNumberTheoremAnd contributors"
+          }
+        ],
+        "identifier": "https://github.com/kim-em/PrimeNumberTheoremAnd",
+        "relationship": "other",
+        "title": "PrimeNumberTheoremAnd"
+      },
+      {
+        "authors": [
+          {
+            "name": "FormalFrontier contributors"
+          }
+        ],
+        "identifier": "https://github.com/FormalFrontier/TauCeti",
+        "relationship": "other",
+        "title": "TauCeti"
+      },
+      {
+        "authors": [
+          {
+            "name": "Mathlib contributors"
+          }
+        ],
+        "identifier": "https://github.com/leanprover-community/mathlib4",
+        "relationship": "other",
+        "title": "Mathlib"
+      }
+    ],
+    "related_formalizations": [],
+    "repository_role": "substantive-development",
+    "responsible_maintainers": [
+      {
+        "name": "Example Maintainer"
+      }
+    ],
+    "result_origin": "original"
+  },
+  "source": {
+    "commit": "49cc9dd72a12c3b324957a9f2f965237ef0fea05",
+    "license": {
+      "declared_identifier": "Apache-2.0",
+      "detected_identifier": "Apache-2.0",
+      "path": "LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    "repository": "kim-em/erdos-unit-distance-comparator",
+    "repository_url": "https://github.com/kim-em/erdos-unit-distance-comparator",
+    "tree_url": "https://github.com/kim-em/erdos-unit-distance-comparator/tree/49cc9dd72a12c3b324957a9f2f965237ef0fea05"
+  },
+  "preservation": {
+    "archive_owner": "PalomarArchive",
+    "archived_at": "2026-07-29T09:10:00Z",
+    "receipt_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "repositories": [
+      {
+        "source_repository": "b-mehta/PrimeCert",
+        "commit": "f699a3e5d3efb381b9ddfb61a1ca51be25f456bd",
+        "fork_repository": "PalomarArchive/fixture",
+        "ref": "refs/tags/palomar/PALOMAR-2026-08-05-419273-v3/f699a3e5d3efb381b9ddfb61a1ca51be25f456bd"
+      },
+      {
+        "source_repository": "FormalFrontier/TauCeti",
+        "commit": "221bb56a017bb794421eac4fa543d7a5e85add75",
+        "fork_repository": "PalomarArchive/fixture",
+        "ref": "refs/tags/palomar/PALOMAR-2026-08-05-419273-v3/221bb56a017bb794421eac4fa543d7a5e85add75"
+      },
+      {
+        "source_repository": "hanwenzhu/LeanArchitect",
+        "commit": "8f56f86dcec03fa46cd21b0f7bee4d724f68dcc4",
+        "fork_repository": "PalomarArchive/fixture",
+        "ref": "refs/tags/palomar/PALOMAR-2026-08-05-419273-v3/8f56f86dcec03fa46cd21b0f7bee4d724f68dcc4"
+      },
+      {
+        "source_repository": "kim-em/erdos-unit-distance",
+        "commit": "34b4587bbd0740efb9c06a519a8ee14a3eff8cd7",
+        "fork_repository": "PalomarArchive/fixture",
+        "ref": "refs/tags/palomar/PALOMAR-2026-08-05-419273-v3/34b4587bbd0740efb9c06a519a8ee14a3eff8cd7"
+      },
+      {
+        "source_repository": "kim-em/erdos-unit-distance-comparator",
+        "commit": "49cc9dd72a12c3b324957a9f2f965237ef0fea05",
+        "fork_repository": "PalomarArchive/fixture",
+        "ref": "refs/tags/palomar/PALOMAR-2026-08-05-419273-v3/49cc9dd72a12c3b324957a9f2f965237ef0fea05"
+      },
+      {
+        "source_repository": "kim-em/leancert",
+        "commit": "8f56d605831f043b7f137385bfb67224d5784416",
+        "fork_repository": "PalomarArchive/fixture",
+        "ref": "refs/tags/palomar/PALOMAR-2026-08-05-419273-v3/8f56d605831f043b7f137385bfb67224d5784416"
+      },
+      {
+        "source_repository": "kim-em/PrimeNumberTheoremAnd",
+        "commit": "e025424629cafbfa6ad98eee5fb4f22e1ad6086b",
+        "fork_repository": "PalomarArchive/fixture",
+        "ref": "refs/tags/palomar/PALOMAR-2026-08-05-419273-v3/e025424629cafbfa6ad98eee5fb4f22e1ad6086b"
+      },
+      {
+        "source_repository": "leanprover-community/aesop",
+        "commit": "7897ea6e5cfc6522d355083bdfa798377ab35e11",
+        "fork_repository": "PalomarArchive/fixture",
+        "ref": "refs/tags/palomar/PALOMAR-2026-08-05-419273-v3/7897ea6e5cfc6522d355083bdfa798377ab35e11"
+      },
+      {
+        "source_repository": "leanprover-community/batteries",
+        "commit": "c6f7103faab35720af56784a9553733832f17349",
+        "fork_repository": "PalomarArchive/fixture",
+        "ref": "refs/tags/palomar/PALOMAR-2026-08-05-419273-v3/c6f7103faab35720af56784a9553733832f17349"
+      },
+      {
+        "source_repository": "leanprover-community/import-graph",
+        "commit": "99c763c8a96d3d44fb4994e96eaa51ca4568449d",
+        "fork_repository": "PalomarArchive/fixture",
+        "ref": "refs/tags/palomar/PALOMAR-2026-08-05-419273-v3/99c763c8a96d3d44fb4994e96eaa51ca4568449d"
+      },
+      {
+        "source_repository": "leanprover-community/LeanSearchClient",
+        "commit": "c5d5b8fe6e5158def25cd28eb94e4141ad97c843",
+        "fork_repository": "PalomarArchive/fixture",
+        "ref": "refs/tags/palomar/PALOMAR-2026-08-05-419273-v3/c5d5b8fe6e5158def25cd28eb94e4141ad97c843"
+      },
+      {
+        "source_repository": "leanprover-community/mathlib4",
+        "commit": "0be66d77ba290828a5260d883ace636f56bce89a",
+        "fork_repository": "PalomarArchive/fixture",
+        "ref": "refs/tags/palomar/PALOMAR-2026-08-05-419273-v3/0be66d77ba290828a5260d883ace636f56bce89a"
+      },
+      {
+        "source_repository": "leanprover-community/plausible",
+        "commit": "744117af710b1c0400cd297c9ce91f8d0ad3a347",
+        "fork_repository": "PalomarArchive/fixture",
+        "ref": "refs/tags/palomar/PALOMAR-2026-08-05-419273-v3/744117af710b1c0400cd297c9ce91f8d0ad3a347"
+      },
+      {
+        "source_repository": "leanprover-community/ProofWidgets4",
+        "commit": "b2da7698bdf22804095ea5b5007f23c09398f687",
+        "fork_repository": "PalomarArchive/fixture",
+        "ref": "refs/tags/palomar/PALOMAR-2026-08-05-419273-v3/b2da7698bdf22804095ea5b5007f23c09398f687"
+      },
+      {
+        "source_repository": "leanprover-community/quote4",
+        "commit": "94346b7b49c36ae871639d1434232f057c193d60",
+        "fork_repository": "PalomarArchive/fixture",
+        "ref": "refs/tags/palomar/PALOMAR-2026-08-05-419273-v3/94346b7b49c36ae871639d1434232f057c193d60"
+      },
+      {
+        "source_repository": "leanprover/lean4-cli",
+        "commit": "baf3e62fbb3502305076ca077e004aea78157c63",
+        "fork_repository": "PalomarArchive/fixture",
+        "ref": "refs/tags/palomar/PALOMAR-2026-08-05-419273-v3/baf3e62fbb3502305076ca077e004aea78157c63"
+      },
+      {
+        "source_repository": "PatrickMassot/checkdecls",
+        "commit": "3d425859e73fcfbef85b9638c2a91708ef4a22d4",
+        "fork_repository": "PalomarArchive/fixture",
+        "ref": "refs/tags/palomar/PALOMAR-2026-08-05-419273-v3/3d425859e73fcfbef85b9638c2a91708ef4a22d4"
+      }
+    ]
+  },
+  "formalization": {
+    "challenge_path": "Challenge.lean",
+    "comparator_config_path": "comparator.json",
+    "definition_names": [],
+    "formalization_metadata_path": "formalization.yaml",
+    "lean_toolchain": "leanprover/lean4:v4.31.0-rc2",
+    "permitted_axioms": [
+      "propext",
+      "Quot.sound",
+      "Classical.choice"
+    ],
+    "project_dependencies": [
+      {
+        "name": "ErdosUnitDistance",
+        "repository": "kim-em/erdos-unit-distance",
+        "revision": "34b4587bbd0740efb9c06a519a8ee14a3eff8cd7"
+      },
+      {
+        "name": "mathlib",
+        "repository": "leanprover-community/mathlib4",
+        "revision": "0be66d77ba290828a5260d883ace636f56bce89a"
+      },
+      {
+        "name": "TauCeti",
+        "repository": "FormalFrontier/TauCeti",
+        "revision": "221bb56a017bb794421eac4fa543d7a5e85add75"
+      },
+      {
+        "name": "PrimeNumberTheoremAnd",
+        "repository": "kim-em/PrimeNumberTheoremAnd",
+        "revision": "e025424629cafbfa6ad98eee5fb4f22e1ad6086b"
+      },
+      {
+        "name": "plausible",
+        "repository": "leanprover-community/plausible",
+        "revision": "744117af710b1c0400cd297c9ce91f8d0ad3a347"
+      },
+      {
+        "name": "LeanSearchClient",
+        "repository": "leanprover-community/LeanSearchClient",
+        "revision": "c5d5b8fe6e5158def25cd28eb94e4141ad97c843"
+      },
+      {
+        "name": "importGraph",
+        "repository": "leanprover-community/import-graph",
+        "revision": "99c763c8a96d3d44fb4994e96eaa51ca4568449d"
+      },
+      {
+        "name": "proofwidgets",
+        "repository": "leanprover-community/ProofWidgets4",
+        "revision": "b2da7698bdf22804095ea5b5007f23c09398f687"
+      },
+      {
+        "name": "aesop",
+        "repository": "leanprover-community/aesop",
+        "revision": "7897ea6e5cfc6522d355083bdfa798377ab35e11"
+      },
+      {
+        "name": "Qq",
+        "repository": "leanprover-community/quote4",
+        "revision": "94346b7b49c36ae871639d1434232f057c193d60"
+      },
+      {
+        "name": "batteries",
+        "repository": "leanprover-community/batteries",
+        "revision": "c6f7103faab35720af56784a9553733832f17349"
+      },
+      {
+        "name": "PrimeCert",
+        "repository": "b-mehta/PrimeCert",
+        "revision": "f699a3e5d3efb381b9ddfb61a1ca51be25f456bd"
+      },
+      {
+        "name": "leancert",
+        "repository": "kim-em/leancert",
+        "revision": "8f56d605831f043b7f137385bfb67224d5784416"
+      },
+      {
+        "name": "checkdecls",
+        "repository": "PatrickMassot/checkdecls",
+        "revision": "3d425859e73fcfbef85b9638c2a91708ef4a22d4"
+      },
+      {
+        "name": "LeanArchitect",
+        "repository": "hanwenzhu/LeanArchitect",
+        "revision": "8f56f86dcec03fa46cd21b0f7bee4d724f68dcc4"
+      },
+      {
+        "name": "Cli",
+        "repository": "leanprover/lean4-cli",
+        "revision": "baf3e62fbb3502305076ca077e004aea78157c63"
+      }
+    ],
+    "solution_path": "Solution.lean",
+    "theorem_names": [
+      "UnitDistance.erdos_unit_distance_uniform_constant_false"
+    ],
+    "lakefile_path": "lakefile.toml"
+  },
+  "verification": {
+    "challenge_sha256": "bac7d896f0b3114e86d2ff44d9f6a8d354c4f7e51c036781ba886dbf7709da35",
+    "comparator_commit": "68a064109f01c08f47c8edc9f51d6a2bbffaa188",
+    "evidence_path": "evidence/PALOMAR-2026-08-05-419273-v3/bd350d6cf3578cef28423c340c9043f8fc4b3bcfd4c4ed959a4eea9d34781c73/",
+    "evidence_tree_sha256": "bd350d6cf3578cef28423c340c9043f8fc4b3bcfd4c4ed959a4eea9d34781c73",
+    "landrun_commit": "811cfff51ceaf3d9843708aa6d22e9b84ccac8b4",
+    "lean4export_commit": "b66b1cd7b8819db6059bc3d6093b22b0a380e793",
+    "mechanical_report_sha256": "08ad7a8e8cdd2aa7f9a74f3d87572920430695c709a28c67289b058d2de0b362",
+    "nanoda_commit": "68d5ca9db226849b41a6fff59d796ff19d0a8840",
+    "solution_sha256": "c0f4a6beefb124f1952fcdd8e5dccf909f42a83e3820f5190f38de8f4d9df103",
+    "verified_at": "2026-08-03T08:30:57Z",
+    "workflow_commit": "c1693544cf2734974a8361e416bd49b9542c6497",
+    "workflow_run_attempt": 1,
+    "workflow_url": "https://github.com/PalomarRegistry/PalomarSubmission/actions/runs/30796437472",
+    "repository": "PalomarRegistry/PalomarSubmission",
+    "run_id": 30796437472,
+    "workflow_path": ".github/workflows/submission.yml"
+  },
+  "challenge_render": {
+    "artifact_path": "renders/PALOMAR-2026-08-05-419273-v3/559040e70ab9bf424b1cdedd94467c716e49af478eae36f83f30c2348ddbab97/",
+    "artifact_tree_sha256": "559040e70ab9bf424b1cdedd94467c716e49af478eae36f83f30c2348ddbab97",
+    "entrypoint": "Challenge/index.html",
+    "format": "verso-html",
+    "landrun_commit": "811cfff51ceaf3d9843708aa6d22e9b84ccac8b4",
+    "rendered_at": "2026-08-01T13:04:29Z",
+    "renderer_commit": "8694f51f46daba7cd9c0a46ca143764aeb939d44",
+    "verso_commit": "916bb962ceb8b88e6a731db6d28e862f99e834c4"
+  },
+  "review": {
+    "policy_commit": "008728ddc6ddbeacf95c3a3e972d26ca62d09439",
+    "reviewed_at": "2026-07-28T12:57:32Z",
+    "reviewer_models": [
+      "claude:default"
+    ],
+    "verdict": "accept",
+    "warnings": [
+      "The formalized statement is the uniform-constant refutation (for every C > 0 and every N there are n >= N and an n-point planar set with more than n^(1 + C / log log n) unit distances). It is strictly weaker than, and an immediate consequence of, the previously published fixed-power disproof. The metadata states this limitation plainly in result.scope_limitations and makes no novelty claim; the record asserts no priority.",
+      "The principal informal source is an X post (https://x.com/__alpoge__/status/2064409100562366543) whose only durable copy cited in the record is a transcription hosted in the submitter's own proof repository. The record describes that transcription as exact without stating who checked it against the original or how, so the bibliographic anchor for the argument being formalized is weaker than the rest of the provenance.",
+      "Authorship of the archival PDF source is an acknowledged inference: the metadata records that the PDF carries no byline and attributes it on the basis of unnamed \"contemporary accounts\" that are not cited. The record therefore asserts a specific production history involving a named person and an AI system that a reader cannot check from anything supplied.",
+      "review.status is self-assessed. The submitter, the formalization author, and the operator posting the review and publication comments are the same person, and the metadata explicitly disclaims any independent specialist or journal-style human review of the mathematics. Acceptance records that the submission cleared Palomar's editorial floor, not that a human expert has checked the result.",
+      "The pinned dependency kim-em/PrimeNumberTheoremAnd contains sorried declarations in Wiener.lean (lines 323 and 342, visible in the comparator log). The metadata discloses this and correctly qualifies that these are not in the axiom closure of the compared theorem; the exported axiom set for the compared declaration is limited to propext, Quot.sound, and Classical.choice.",
+      "The field challenge_statement_holes: 1 is ambiguous without cross-referencing. comparator.json declares no definition_names, and the single hole is the expected `sorry` standing in for the proof of the compared theorem in Challenge.lean. No definition in the challenge surface is left open for the solution to instantiate."
+    ],
+    "report": {
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  },
+  "trust": {
+    "challenge_bytes": 1644,
+    "challenge_dependencies": [
+      {
+        "provenance": "allowlisted",
+        "repository": "leanprover-community/mathlib4"
+      }
+    ],
+    "challenge_imports": [
+      "Mathlib"
+    ],
+    "challenge_lines": 44,
+    "level": "high",
+    "reasons": []
+  },
+  "submission": {
+    "submission_id": "a1b2c3d4e5f6",
+    "authorization": {
+      "relationship": "maintainer"
+    }
+  }
+}

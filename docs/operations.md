@@ -55,8 +55,9 @@ printf '%s' "$CLOUDFLARE_API_TOKEN" | gh secret set CLOUDFLARE_API_TOKEN \
 unset CLOUDFLARE_API_TOKEN
 ```
 
-The `production` environment accepts only protected branches and does not add
-an interactive approval. Every successful `CI` run caused by a push to `main`
+The `production` environment restricts deployments to protected branches and
+has no required reviewers and no wait timer; administrators can bypass its
+protection rules. Every successful `CI` run caused by a push to `main`
 automatically triggers `Deploy public-data Worker` for that exact commit, so
 branch protection on `main` is what decides which commits reach production.
 The deployment workflow verifies that the green commit still belongs to `main`

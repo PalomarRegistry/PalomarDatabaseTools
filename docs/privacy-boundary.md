@@ -51,10 +51,22 @@ repository installs an immutable artifact and applies it to the real ledger.
 ## Enforcement
 
 Public workflows have no credential for a private Palomar repository. They use
-only synthetic fixtures or already-public HTTP documents. Production deployment
-uses a GitHub environment with required reviewers. Source-availability writes
-are limited to one Worker route, authenticated with a dedicated secret, bounded
-to 5 MiB, schema-checked, target-set-checked, and conditionally written.
+only synthetic fixtures or already-public HTTP documents.
+
+Production deployment has no approval step of its own: every successful `CI`
+run on a push to `main` deploys the Worker for that commit. The control is
+branch protection on `main`, which requires a pull request, requires `python`,
+`runtime-artifact`, `worker`, and `register` to pass on an up-to-date branch,
+requires linear history and resolved conversations, forbids force pushes and
+branch deletion, and applies to administrators. The `production` environment
+holds the Cloudflare credential and accepts only protected branches; it adds no
+reviewer. `CODEOWNERS` requests Technical Maintainer review on every change,
+and on this file in particular, but that approval is not currently one of the
+merge requirements.
+
+Source-availability writes are limited to one Worker route, authenticated with
+a dedicated secret, bounded to 5 MiB, schema-checked, target-set-checked, and
+conditionally written.
 
 Before copying future code or fixtures here, search the candidate tree for
 real Palomar identifiers, score documents, takedown reasons, tokens, private

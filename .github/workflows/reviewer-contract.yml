@@ -74,7 +74,11 @@ jobs:
           from conftest import Database
 
           database = Database(root.parent / "database")
-          shutil.copytree(root / "tools", database.path / "tools")
+          shutil.copytree(
+              root / "tools",
+              database.path / "tools",
+              ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+          )
           shutil.copytree(root / "tests" / "fixtures", database.path / "tests" / "fixtures")
           shutil.copy(root / "requirements-tools.txt", database.path / "requirements-tools.txt")
           database.init()

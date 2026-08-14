@@ -44,3 +44,12 @@ result rows and `targets_sha256` to match the currently served target document.
 target-publication job uses the existing R2 publication credential and exposes
 only repository names and commit IDs already present in public records. The
 public job performs the numerous GitHub availability probes every six hours.
+
+The schedule is deliberately inert during rollout. After the Worker is
+deployed, the target document is present, and both copies of the writer secret
+are configured, enable it with:
+
+```console
+gh variable set SOURCE_AVAILABILITY_ENABLED \
+  --repo PalomarRegistry/PalomarDatabaseTools --body true
+```

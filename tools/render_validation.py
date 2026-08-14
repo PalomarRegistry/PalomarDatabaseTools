@@ -69,11 +69,13 @@ TRUSTED_RENDER_SCRIPTS = {
             # is immutable, so its digest stays trusted rather than being
             # replaced.
             "d15fb1c3eca7a3eb32293cff66a913301c25fb03706004a0e27319b631c6ff60",
-            # PalomarSubmission "fix: strip inline styles in the render
-            # sanitizers" (pull request 78): the sanitizer drops `style`
-            # attributes, removes SVG and MathML subtrees, and narrows the
-            # element and attribute allowlist.
-            "6686ea33086a48b4d9b1897cb3a002cd17531cfd7c4ae613ea076d363a532b5b",
+            # PalomarSubmission "fix: harden the render sanitizers against
+            # style and structural redressing" (pull request 78): the sanitizer
+            # admits one inline style declaration, drops SVG, MathML and dialog
+            # subtrees, refuses an unbalanced dropped subtree, strips the
+            # presentational and state attributes, and counts the head and body
+            # it rewrites.
+            "c39c4bc61544b0c0b9b6f0605859aceb11a2bf9cbb5c9f22c492d938243dbea7",
         }
     ),
     "palomar-verso.js": frozenset(

@@ -31,7 +31,9 @@ The two documents above the pages are `browse/<YYYY>.json`, which is at most
 366 rows whatever the registry holds, and `browse/index.json`, which names the
 years. Neither is a list of pages, deliberately: a directory naming every page
 is O(pages) rewritten per publication, which is the same quadratic the shards
-had.
+had. Each states the path of the level below it as a template rather than as a
+list -- `year_path` on the head and `page_path` on a year -- so a reader who
+has one of these documents and no source can reach the next; see `day_pages`.
 
 The serial is a position, not a hash: sequential allocation puts one day's
 results in registration order, and paging on the whole serial gives every row

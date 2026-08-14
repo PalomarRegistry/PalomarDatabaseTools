@@ -182,10 +182,15 @@ def _head_years(
     extra: dict[str, Any] | None,
 ) -> dict[str, dict[str, Any]]:
     extra_keys = set(extra or {})
+    # A served head from before the templates were published has the wrong
+    # fields here and so asks for a rebuild, which is what the transition
+    # wants: patching would have given the templates to the documents this
+    # release happened to touch and left every other one without them, and a
+    # tree whose shape depends on which day was written last is not a contract.
     _exact(
         document,
         relative,
-        {"schema_version", "results", "versions", "years"} | extra_keys,
+        {"schema_version", "results", "versions", "year_path", "years"} | extra_keys,
     )
     _integer(document["results"], relative, "results")
     _integer(document["versions"], relative, "versions")
@@ -212,7 +217,7 @@ def _head_years(
 def _year_days(
     document: dict[str, Any], relative: str, year: str
 ) -> dict[str, dict[str, Any]]:
-    _exact(document, relative, {"schema_version", "year", "days"})
+    _exact(document, relative, {"schema_version", "year", "page_path", "days"})
     if document["year"] != year:
         raise _invalid(relative, "year does not match its path")
     days: dict[str, dict[str, Any]] = {}
@@ -371,9 +376,11 @@ def _patch_collection(
 
     for year in sorted({year for year, _day in moved}):
         days = list(years[year].values())
-        _write(output, day_pages.year_path(where, year), day_pages.year_document(year, days))
+        _write(
+            output, day_pages.year_path(where, year), day_pages.year_document(where, year, days)
+        )
         all_years[year] = day_pages.year_row(year, days)
-    _write(output, head, day_pages.head_document(list(all_years.values()), head_extra))
+    _write(output, head, day_pages.head_document(where, list(all_years.values()), head_extra))
 
 
 def _refilled(prior_rows: list[dict[str, Any]], rows: list[dict[str, Any]], cap: int) -> list[dict[str, Any]]:

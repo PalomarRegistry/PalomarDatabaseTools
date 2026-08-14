@@ -332,6 +332,29 @@ def test_the_archive_is_paged_by_the_identifier_and_not_by_position(db, tmp_path
     )["days"]] == ["2026-07-29", "2026-08-04"]
 
 
+def test_a_code_names_the_path_of_its_own_archive_and_not_the_registry_s(db, tmp_path):
+    """A code's archive is the same layout under a different directory, so the
+    templates that make it traversable have to be that code's own.
+
+    Deriving them from the directory the collection is being written into is
+    what makes that true without anything here choosing it, which is the point:
+    a template chosen separately from the writer is a second statement of where
+    the documents go, and the two can disagree.
+    """
+    _classified(db, "PALOMAR-2026-07-29-000201")
+    site = tmp_path / "release"
+    stage_public(db.path, site)
+
+    head = _page(site, "msc", "05C10")
+    assert head["year_path"] == "subjects/msc/05C10/{year}.json"
+    year = json.loads((site / head["year_path"].format(year="2026")).read_text())
+    assert year["page_path"] == "subjects/msc/05C10/{day}/{page}.json"
+    reached = json.loads(
+        (site / year["page_path"].format(day="2026-07-29", page=2)).read_text()
+    )
+    assert [row["id"] for row in reached["entries"]] == ["PALOMAR-2026-07-29-000201"]
+
+
 def test_a_version_that_changes_its_codes_leaves_one_archive_and_joins_another(db, tmp_path):
     """One page out of each, and neither of them found by looking anything up:
     both are the page the result's identifier names under that code."""

@@ -418,6 +418,12 @@ def test_incremental_only_staging_removes_partial_output_and_signals_full(
         ("browse/index.json", "years", "wrong type"),
         ("browse/index.json", None, "invalid JSON"),
         ("browse/index.json", None, "empty object"),
+        # Also the shape of a head and a year served by a publisher from before
+        # the templates. Patching one of those would hand the templates to the
+        # documents this release happens to touch and leave the rest without
+        # them, so the deployment that introduces them rebuilds instead.
+        ("browse/index.json", "year_path", "missing"),
+        ("browse/2026.json", "page_path", "missing"),
         ("browse/2026.json", "days", "missing"),
         ("browse/2026-07-29/1.json", "entries", "missing"),
         ("recent.json", "entries", "missing"),

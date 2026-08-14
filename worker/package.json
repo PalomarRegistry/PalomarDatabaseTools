@@ -12,7 +12,7 @@
     "types": "wrangler types --env-interface Env"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "0.20.3",
+    "@cloudflare/vitest-pool-workers": "0.21.0",
     "@types/node": "24.2.0",
     "typescript": "5.9.2",
     "vitest": "4.1.10",

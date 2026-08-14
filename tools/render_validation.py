@@ -64,7 +64,17 @@ RENDER_CSP_META = (
 )
 TRUSTED_RENDER_SCRIPTS = {
     "palomar-sanitize.js": frozenset(
-        {"d15fb1c3eca7a3eb32293cff66a913301c25fb03706004a0e27319b631c6ff60"}
+        {
+            # Records already registered carry the earlier runtime, and a record
+            # is immutable, so its digest stays trusted rather than being
+            # replaced.
+            "d15fb1c3eca7a3eb32293cff66a913301c25fb03706004a0e27319b631c6ff60",
+            # PalomarSubmission "fix: strip inline styles in the render
+            # sanitizers" (pull request 78): the sanitizer drops `style`
+            # attributes, removes SVG and MathML subtrees, and narrows the
+            # element and attribute allowlist.
+            "6686ea33086a48b4d9b1897cb3a002cd17531cfd7c4ae613ea076d363a532b5b",
+        }
     ),
     "palomar-verso.js": frozenset(
         {

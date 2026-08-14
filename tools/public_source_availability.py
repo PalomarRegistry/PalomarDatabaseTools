@@ -21,11 +21,13 @@ from check_source_availability import (
 )
 
 DEFAULT_ORIGIN = "https://data.palomar-registry.org"
+USER_AGENT = "Palomar-source-availability/1"
 
 
 def _read(url: str) -> tuple[object, str | None]:
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
-        with urllib.request.urlopen(url, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=30) as response:
             return json.load(response), response.headers.get("ETag")
     except urllib.error.HTTPError as error:
         if error.code == 404:
@@ -66,6 +68,7 @@ def _put(url: str, token: str, body: bytes, etag: str | None) -> None:
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
         "If-Match" if etag is not None else "If-None-Match": etag or "*",
+        "User-Agent": USER_AGENT,
     }
     request = urllib.request.Request(url, data=body, method="PUT", headers=headers)
     with urllib.request.urlopen(request, timeout=30) as response:

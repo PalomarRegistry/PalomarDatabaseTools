@@ -59,7 +59,21 @@ def _targets(value: object) -> tuple[list[dict[str, str]], str]:
 
 
 def _digest(targets: list[dict[str, str]]) -> str:
-    canonical = json.dumps(targets, separators=(",", ":"), ensure_ascii=True).encode() + b"\n"
+    # Match the Worker's explicit AvailabilityTarget construction order. The
+    # target document itself is emitted with sorted object keys, so hashing the
+    # parsed dictionaries directly would accidentally bind the digest to the
+    # producer's presentation order instead of this protocol order.
+    protocol_targets = [
+        {
+            "source_repository": row["source_repository"],
+            "commit": row["commit"],
+            "fork_repository": row["fork_repository"],
+        }
+        for row in targets
+    ]
+    canonical = json.dumps(
+        protocol_targets, separators=(",", ":"), ensure_ascii=True
+    ).encode() + b"\n"
     return hashlib.sha256(canonical).hexdigest()
 
 

@@ -54,3 +54,17 @@ def test_public_writes_identify_the_updater(monkeypatch):
     assert request.get_header("If-match") == '"current"'
     assert request.get_method() == "PUT"
     assert timeout == 30
+
+
+def test_target_digest_uses_the_worker_protocol_key_order():
+    # The private publisher sorts JSON object keys; protocol hashing must not
+    # inherit that presentation order after parsing the target document.
+    target = {
+        "commit": "a" * 40,
+        "fork_repository": "PalomarArchive/example",
+        "source_repository": "example/source",
+    }
+
+    assert public_source_availability._digest([target]) == (
+        "2701e52ebf5bf6effda86213cfb7da4faf67e3a55596abbfa510249ba98b42d6"
+    )

@@ -10,11 +10,46 @@ pin.
 
 ## Worker deployment
 
-Create the `production` GitHub environment with required reviewers and add
-`CLOUDFLARE_ACCOUNT_ID` and a narrowly scoped `CLOUDFLARE_API_TOKEN`. Dispatch
-`Deploy public-data Worker` with the exact green commit. The workflow verifies
-that the commit belongs to `main`, repeats Worker tests, and deploys both the
-inert and production environments.
+The repository has two GitHub Actions environments with deliberately different
+credentials:
+
+| GitHub environment | Environment secret | Used by |
+| --- | --- | --- |
+| `production` | `CLOUDFLARE_ACCOUNT_ID` | Worker deployment |
+| `production` | `CLOUDFLARE_API_TOKEN` | Worker deployment |
+| `source-availability-production` | `PALOMAR_AVAILABILITY_UPDATE_TOKEN` | Six-hourly availability refresh |
+
+Do not put the Cloudflare deployment token in
+`source-availability-production`. That environment is only for the bounded
+availability writer.
+
+Create the Cloudflare Account API token from
+<https://dash.cloudflare.com/?to=%2F%3Aaccount%2Fapi-tokens>. Cloudflare's
+current Account API-token editor exposes the underlying permission as
+**Workers Scripts: Edit**; some Cloudflare documentation calls the corresponding
+preset **Edit Cloudflare Workers**. Restrict the token to the Palomar Cloudflare
+account. The deployment token needs no R2 object permission: the deployed
+Worker reaches R2 through its binding, and the private publisher has a separate
+bucket-scoped credential.
+
+To install the token in GitHub's UI, open
+<https://github.com/PalomarRegistry/PalomarDatabaseTools/settings/environments>,
+select **production**, and add an environment secret named exactly
+`CLOUDFLARE_API_TOKEN`. Do not rely on a guessed environment-edit URL; GitHub's
+direct route varies with the viewer's settings context. As a CLI alternative,
+with the value in a local shell variable that was not placed in shell history:
+
+```console
+printf '%s' "$CLOUDFLARE_API_TOKEN" | gh secret set CLOUDFLARE_API_TOKEN \
+  --repo PalomarRegistry/PalomarDatabaseTools --env production
+unset CLOUDFLARE_API_TOKEN
+```
+
+The `production` environment has required reviewers. Dispatch `Deploy
+public-data Worker` with the exact green commit. The workflow verifies that the
+commit belongs to `main`, repeats Worker tests, and deploys both the inert and
+production Worker environments. The similarly named GitHub and Wrangler
+environments are separate concepts.
 
 ## Source-availability writer
 

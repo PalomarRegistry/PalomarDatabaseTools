@@ -23,14 +23,16 @@ Do not put the Cloudflare deployment token in
 `source-availability-production`. That environment is only for the bounded
 availability writer.
 
-Create the Cloudflare Account API token from
+Create the Cloudflare API token from
 <https://dash.cloudflare.com/?to=%2F%3Aaccount%2Fapi-tokens>. Cloudflare's
-current Account API-token editor exposes the underlying permission as
-**Workers Scripts: Edit**; some Cloudflare documentation calls the corresponding
-preset **Edit Cloudflare Workers**. Restrict the token to the Palomar Cloudflare
-account. The deployment token needs no R2 object permission: the deployed
-Worker reaches R2 through its binding, and the private publisher has a separate
-bucket-scoped credential.
+current custom-token editor requires both **Workers Scripts: Edit** for the
+Palomar account and **Workers Routes: Edit** for the
+`palomar-registry.org` zone. The latter is required because `wrangler deploy`
+reconciles the production custom domain as well as uploading the script.
+Cloudflare documentation calls the broader preset **Edit Cloudflare Workers**.
+The deployment token needs no R2 object permission: the deployed Worker reaches
+R2 through its binding, and the private publisher has a separate bucket-scoped
+credential.
 
 To install the token in GitHub's UI, open
 <https://github.com/PalomarRegistry/PalomarDatabaseTools/settings/environments>,

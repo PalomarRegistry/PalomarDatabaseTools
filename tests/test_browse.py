@@ -180,6 +180,63 @@ def test_the_head_names_the_years_and_never_the_days_or_the_pages(db, tmp_path):
     assert "days" not in head and "pages" not in head
 
 
+def test_a_reader_holding_only_the_head_can_reach_a_record(db, tmp_path):
+    """What the head is for, and what it did not say.
+
+    It named years and counts and no path at all, so getting from it to a page
+    meant knowing that a year is at `browse/<YYYY>.json` and a page at
+    `browse/<YYYY-MM-DD>/<page>.json` -- a grammar stated in this repository's
+    docstrings and in nothing the registry served. A reader who had the head
+    and no source could go no further, which is the opposite of what a head is.
+
+    So this traverses the way a stranger has to: expand the template the
+    document above gives, read what it names, and never build a path from
+    anything this test knows. The pages already named the record.
+    """
+    db.add_entry("PALOMAR-2026-07-29-000201", 1)
+    db.add_entry("PALOMAR-2027-01-04-000001", 1)
+    site = tmp_path / "release"
+    stage_public(db.path, site)
+
+    head = _head(site)
+    reached = []
+    for row in head["years"]:
+        year = json.loads((site / head["year_path"].format(year=row["year"])).read_text())
+        assert len(year["days"]) == row["days"]
+        for day in year["days"]:
+            for number in range(day["first_page"], day["last_page"] + 1):
+                relative = year["page_path"].format(day=day["day"], page=number)
+                reached.extend(json.loads((site / relative).read_text())["entries"])
+
+    assert [row["id"] for row in reached] == [
+        FIRST,
+        "PALOMAR-2026-07-29-000201",
+        "PALOMAR-2027-01-04-000001",
+    ]
+    assert len(reached) == head["versions"]
+    for row in reached:
+        assert (site / row["path"]).is_file()
+
+
+def test_a_template_is_one_string_however_much_the_collection_holds(db, tmp_path):
+    """The templates are what the bound allows and a directory is not.
+
+    A head that named each year document, or a year that named each of its
+    pages, would be the O(pages) directory this layout exists not to have. One
+    template says the same thing in a string whose length is fixed before the
+    registry has anything in it.
+    """
+    for serial in range(1, 401):
+        db.add_entry(f"PALOMAR-2026-08-07-{serial:06d}", 1)
+    site = tmp_path / "release"
+    stage_public(db.path, site)
+
+    assert _head(site)["year_path"] == "browse/{year}.json"
+    year = _year(site, "2026")
+    assert year["page_path"] == "browse/{day}/{page}.json"
+    assert year["days"][-1]["last_page"] == 2, "a day whose pages a template covers"
+
+
 def test_a_quiet_day_has_no_row_and_no_page(db, tmp_path):
     db.add_entry("PALOMAR-2026-08-03-000001", 1)
     site = tmp_path / "release"

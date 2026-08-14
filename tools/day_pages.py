@@ -37,6 +37,21 @@ most `PAGE_SERIALS` results, and at most `PAGE_SERIALS` times the cap on
 versions per result rows. There is no separate row cap to trip: a cap that
 could refuse a page would have no remedy, since a day cannot be repaged after
 the fact without moving rows that readers have already been pointed at.
+
+Not naming the level below leaves a reader who has one of these documents and
+nothing else unable to reach the next: the head named years and no path, so
+getting from it to a page meant knowing the URL grammar this module happens to
+use, which no served document stated. Each document above the pages therefore
+carries one template naming its children -- `year_path` on the head,
+`page_path` on a year -- and the pages carry a `path` per row already. One
+string, whatever the collection holds, so the bound above is untouched: a
+document naming its children individually is the O(pages) directory this
+layout exists to avoid, and a template is not one.
+
+The templates are written by the same functions that write the real paths,
+with a placeholder in place of the value, so a template that disagreed with
+where the collection actually put a document would have to be a disagreement
+between one call and another of one function.
 """
 
 from __future__ import annotations
@@ -68,12 +83,23 @@ def coordinate(identifier: str) -> tuple[str, str, int]:
     return year, day, (serial - 1) // PAGE_SERIALS + 1
 
 
-def page_path(directory: str, day: str, page: int) -> str:
+def page_path(directory: str, day: str, page: int | str) -> str:
     return f"{directory}/{day}/{page}.json"
 
 
 def year_path(directory: str, year: str) -> str:
     return f"{directory}/{year}.json"
+
+
+# RFC 6570 level-1 expressions, expanded from the row a reader already has:
+# `{year}` from a head row, `{day}` from a year row, and `{page}` from any
+# integer in that row's closed `first_page`..`last_page` interval.
+def year_template(directory: str) -> str:
+    return year_path(directory, "{year}")
+
+
+def page_template(directory: str) -> str:
+    return page_path(directory, "{day}", "{page}")
 
 
 def _write(output: pathlib.Path, relative: str, document: dict[str, Any]) -> pathlib.Path:
@@ -156,21 +182,27 @@ def year_row(year: str, days: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def year_document(year: str, days: list[dict[str, Any]]) -> dict[str, Any]:
+def year_document(directory: str, year: str, days: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "year": year,
+        "page_path": page_template(directory),
         "days": sorted(days, key=lambda row: str(row["day"])),
     }
 
 
-def head_document(years: list[dict[str, Any]], extra: dict[str, Any] | None = None) -> dict[str, Any]:
+def head_document(
+    directory: str,
+    years: list[dict[str, Any]],
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     ordered = sorted(years, key=lambda row: str(row["year"]))
     return {
         "schema_version": SCHEMA_VERSION,
         **(extra or {}),
         "results": sum(int(year["results"]) for year in ordered),
         "versions": sum(int(year["versions"]) for year in ordered),
+        "year_path": year_template(directory),
         "years": ordered,
     }
 
@@ -202,6 +234,8 @@ def write_collection(
     for year, days in sorted(by_year.items()):
         day_rows = [day_row(day, day_pages) for day, day_pages in sorted(days.items())]
         years.append(year_row(year, day_rows))
-        written.append(_write(output, year_path(directory, year), year_document(year, day_rows)))
-    written.append(_write(output, head_path, head_document(years, extra)))
+        written.append(
+            _write(output, year_path(directory, year), year_document(directory, year, day_rows))
+        )
+    written.append(_write(output, head_path, head_document(directory, years, extra)))
     return written

@@ -46,8 +46,15 @@ AVAILABILITY_TARGETS_PATH = "source-availability-targets.json"
 # notification channel and is allowed to run ahead of the rest of the release;
 # that is what an RSS reader assumes anyway, and it is what lets one new entry
 # rewrite the seven feeds it belongs to rather than all of them under a fresh
-# release prefix. `recent.json` is the same bargain for the landing page.
-STABLE_PATHS = (AVAILABILITY_PATH, AVAILABILITY_TARGETS_PATH, "feed.xml", "recent.json")
+# release prefix. `recent.json` is the same bargain for the landing page, and
+# `recent-renders.json` accompanies it and is rewritten with it.
+STABLE_PATHS = (
+    AVAILABILITY_PATH,
+    AVAILABILITY_TARGETS_PATH,
+    "feed.xml",
+    "recent.json",
+    "recent-renders.json",
+)
 STABLE_PREFIXES = (
     "browse/", "feeds/", "registration-identities/", "repositories/", "search/",
     "subjects/", "tombstones/", "versions/"
@@ -62,7 +69,13 @@ UNOWNED_PATHS = (AVAILABILITY_PATH, AVAILABILITY_TARGETS_PATH)
 # it, and the difference is a landing page that has forgotten the registry.
 # Everything else at a stable key is per-record or per-word and may genuinely
 # stop existing.
-ALWAYS_WRITTEN = (AVAILABILITY_PATH, "feed.xml", "recent.json", "browse/index.json")
+ALWAYS_WRITTEN = (
+    AVAILABILITY_PATH,
+    "feed.xml",
+    "recent.json",
+    "recent-renders.json",
+    "browse/index.json",
+)
 LAUNCH_MARKER = ".palomar-launched"
 import release_delta
 

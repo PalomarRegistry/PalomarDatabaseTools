@@ -143,11 +143,12 @@ def test_the_delta_does_not_carry_a_row_per_published_object(repo, tmp_path, mon
     large = _cost(repo, tmp_path, monkeypatch, 91)
     assert small["delta rows for pages"] == large["delta rows for pages"]
     # One browse page and the two documents over it, the same three for each of
-    # the two codes the record carries, its version index, the recent page and
-    # the three feeds those two render into, plus the repository and exact
-    # registration-identity lookups. The rest of the delta is the record
-    # itself, its render and its evidence, which is the work.
-    assert small["delta rows for pages"] - small["delta rows for postings"] == 16, small
+    # the two codes the record carries, its version index, the recent page, the
+    # render hashes of exactly that page, and the three feeds those render
+    # into, plus the repository and exact registration-identity lookups. The
+    # rest of the delta is the record itself, its render and its evidence,
+    # which is the work.
+    assert small["delta rows for pages"] - small["delta rows for postings"] == 17, small
     # Two per distinct word the fixture record carries, plus the fixed stopword
     # document that is deliberately staged and rewritten on every release.
     assert small["delta rows for postings"] == 2 * 34 + 1, small

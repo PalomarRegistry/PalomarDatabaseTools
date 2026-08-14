@@ -386,6 +386,42 @@ def test_an_old_incomplete_recent_shape_forces_a_rebuild(served, capsys):
     _agree(served)
 
 
+def test_a_missing_render_document_rebuilds_rather_than_going_stale(served, capsys):
+    """Unlike the page, absence here cannot be told from "no release has written
+    one yet", which is the state of every release until the first one after it
+    was introduced. Both want the rebuild, and one rebuild settles it."""
+    served.database.commit("a starting point")
+    served.publish()
+    (served.path / "recent-renders.json").unlink()
+    served.database.add_entry("PALOMAR-2026-07-29-000002", 1)
+    served.database.commit("add one")
+
+    served.publish()
+
+    assert "staging everything" in capsys.readouterr().out
+    _agree(served)
+
+
+def test_an_invalid_render_document_forces_a_rebuild(served, capsys):
+    """A prior document outside the closed shape is not evidence for an
+    incremental update: the hashes it carries for untouched results are exactly
+    what a patch would copy forward."""
+    served.database.commit("a starting point")
+    served.publish()
+    path = served.path / "recent-renders.json"
+    document = json.loads(path.read_text())
+    document["renders"][0]["artifact_tree_sha256"] = "0" * 63
+    path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n")
+    served.database.add_entry("PALOMAR-2026-07-29-000002", 1)
+    served.database.commit("add one")
+
+    served.publish()
+
+    assert "invalid recent-renders.json" in capsys.readouterr().out
+    assert served.delta["parent"] is None, "it patched hashes from an unchecked document"
+    _agree(served)
+
+
 def test_incremental_only_staging_removes_partial_output_and_signals_full(
     served, tmp_path
 ):

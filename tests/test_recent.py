@@ -19,9 +19,12 @@ import release_delta
 from build_recent import (
     RECENT_ITEMS,
     build_recent,
+    render_hash,
+    render_page,
     row,
     validate_entry_schema_for_recent,
     validate_recent,
+    validate_recent_renders,
 )
 from stage_public import stage_public
 
@@ -30,6 +33,10 @@ FIRST = "PALOMAR-2026-07-29-000001"
 
 def _recent(site):
     return json.loads((site / "recent.json").read_text())
+
+
+def _renders(site):
+    return json.loads((site / "recent-renders.json").read_text())
 
 
 def _stage(root, site, **arguments):
@@ -177,6 +184,125 @@ def test_the_projection_has_one_exact_checked_fixture():
     document = {"schema_version": 1, "entries": [row(entry, 3)]}
 
     assert validate_recent(document) == expected
+
+
+def test_the_render_projection_has_one_exact_checked_fixture():
+    root = pathlib.Path(__file__).resolve().parents[1]
+    entry = json.loads((root / "tests/fixtures/entry.json").read_text())
+    expected = json.loads((root / "tests/fixtures/recent-renders.json").read_text())
+
+    page = [row(entry, 3)]
+    document = {
+        "schema_version": 1,
+        "renders": render_page(page, {(entry["id"], entry["version"]): render_hash(entry)}),
+    }
+
+    assert validate_recent_renders(document) == expected
+
+
+def test_the_two_documents_name_the_same_results(db, tmp_path):
+    """Built from one selection, so a reader that has the page has the hash of
+    every result on it, and of nothing else."""
+    for serial in range(2, 5):
+        _dated(db, f"PALOMAR-2026-07-29-{serial:06d}", f"2026-08-0{serial}T00:00:00Z")
+    site = tmp_path / "release"
+    stage_public(db.path, site)
+
+    page = _recent(site)
+    renders = _renders(site)
+
+    assert renders["schema_version"] == 1
+    assert {(item["id"], item["version"]) for item in renders["renders"]} == {
+        (item["id"], item["version"]) for item in page["entries"]
+    }
+
+
+def test_the_render_document_is_in_increasing_identifier_order(db, tmp_path):
+    for serial in range(2, 5):
+        _dated(db, f"PALOMAR-2026-07-29-{serial:06d}", f"2026-08-0{serial}T00:00:00Z")
+    site = tmp_path / "release"
+    stage_public(db.path, site)
+
+    identifiers = [item["id"] for item in _renders(site)["renders"]]
+
+    assert identifiers == sorted(identifiers)
+
+
+def test_the_render_projection_refuses_a_row_it_cannot_address(db, tmp_path):
+    """Dropping the row instead would publish a page whose hover does nothing
+    for one result, with nothing anywhere saying why."""
+    site = tmp_path / "release"
+    stage_public(db.path, site)
+    page = _recent(site)["entries"]
+
+    with pytest.raises(ValueError, match="no render hash for"):
+        render_page(page, {})
+
+
+@pytest.mark.parametrize(
+    "mutate,reason",
+    [
+        (lambda document: document.update({"entries": []}), "invalid shape"),
+        (lambda document: document.update({"schema_version": True}), "unsupported schema version"),
+        (
+            lambda document: document["renders"][0].update({"artifact_path": "renders/"}),
+            "invalid shape",
+        ),
+        (
+            lambda document: document["renders"][0].update({"artifact_tree_sha256": "0" * 63}),
+            "artifact_tree_sha256 is malformed",
+        ),
+        (lambda document: document["renders"][0].update({"id": "PALOMAR-1"}), "id is malformed"),
+        (lambda document: document["renders"][0].update({"version": 0}), "version is invalid"),
+    ],
+)
+def test_the_render_projection_refuses_unknown_or_malformed_shapes(mutate, reason):
+    root = pathlib.Path(__file__).resolve().parents[1]
+    document = json.loads((root / "tests/fixtures/recent-renders.json").read_text())
+    mutate(document)
+
+    with pytest.raises(ValueError, match=reason):
+        validate_recent_renders(document)
+
+
+def test_the_render_projection_refuses_duplicate_and_out_of_order_rows(db, tmp_path):
+    _dated(db, "PALOMAR-2026-07-29-000002", "2026-08-02T00:00:00Z")
+    site = tmp_path / "release"
+    stage_public(db.path, site)
+    document = _renders(site)
+
+    duplicated = copy.deepcopy(document)
+    duplicated["renders"].insert(1, copy.deepcopy(duplicated["renders"][0]))
+    with pytest.raises(ValueError, match="increasing identifier order"):
+        validate_recent_renders(duplicated)
+
+    reversed_rows = copy.deepcopy(document)
+    reversed_rows["renders"].reverse()
+    with pytest.raises(ValueError, match="increasing identifier order"):
+        validate_recent_renders(reversed_rows)
+
+
+def test_the_render_projection_refuses_cap_plus_one_rows():
+    root = pathlib.Path(__file__).resolve().parents[1]
+    document = json.loads((root / "tests/fixtures/recent-renders.json").read_text())
+    template = document["renders"][0]
+    document["renders"] = [
+        {**template, "id": f"PALOMAR-2026-07-29-{serial:06d}"}
+        for serial in range(RECENT_ITEMS + 1)
+    ]
+
+    with pytest.raises(ValueError, match="200-row bound"):
+        validate_recent_renders(document)
+
+
+def test_the_render_document_sits_at_a_stable_key(db, tmp_path):
+    """Rewritten in place beside the page it accompanies, not under a release
+    prefix; the two are written together or not at all."""
+    site = tmp_path / "release"
+    delta = _stage(db.path, site)
+
+    assert "recent-renders.json" in [row["path"] for row in delta["stable"]]
+    assert "recent-renders.json" not in [row["path"] for row in delta["aggregates"]]
 
 
 def test_every_canonical_schema_requires_the_fields_the_projection_reads():
@@ -395,7 +521,9 @@ def test_build_recent_needs_no_reads_of_its_own(db, tmp_path):
     output = tmp_path / "site"
     output.mkdir()
 
-    written = build_recent(output, entries)
+    page, renders = build_recent(output, entries)
 
-    assert written.relative_to(output).as_posix() == "recent.json"
-    assert [row["id"] for row in json.loads(written.read_text())["entries"]] == [FIRST]
+    assert page.relative_to(output).as_posix() == "recent.json"
+    assert renders.relative_to(output).as_posix() == "recent-renders.json"
+    assert [row["id"] for row in json.loads(page.read_text())["entries"]] == [FIRST]
+    assert [row["id"] for row in json.loads(renders.read_text())["renders"]] == [FIRST]

@@ -41,9 +41,11 @@ from typing import Any, Iterable
 import day_pages
 from build_browse import DIRECTORY as BROWSE_DIRECTORY
 from build_browse import HEAD_PATH as BROWSE_HEAD
-from build_recent import RECENT_ITEMS, RECENT_PATH
+from build_recent import RECENT_ITEMS, RECENT_PATH, RECENT_RENDERS_PATH
+from build_recent import render_hash, render_page
 from build_recent import row as recent_row
-from build_recent import validate_recent, write_recent
+from build_recent import validate_recent, validate_recent_renders
+from build_recent import write_recent, write_recent_renders
 from build_subjects import SUBJECT_PAGE_ITEMS, archive_row, directory, front_row, head_path
 from selection import codes_of, parsed, rows_newest_first
 
@@ -265,7 +267,7 @@ def prior_paths(touched: Iterable[Touched]) -> list[str]:
     step that works it out needs no bucket credentials and the step that has
     them does nothing but fetch the names it is given.
     """
-    paths = {RECENT_PATH, BROWSE_HEAD}
+    paths = {RECENT_PATH, RECENT_RENDERS_PATH, BROWSE_HEAD}
     for item in touched:
         year, day, page = day_pages.coordinate(item.id)
         paths.add(day_pages.year_path(BROWSE_DIRECTORY, year))
@@ -418,6 +420,17 @@ def patch(
             validate_recent(recent)
         except ValueError as error:
             raise _invalid(RECENT_PATH, str(error)) from error
+    # Not part of the guard above. Absence here is indistinguishable between
+    # "gone" and "no release has written one yet", which is the state of every
+    # release until the first one after this document was introduced. That case
+    # wants the same answer as drift does, and gets it below: a row on the page
+    # whose hash is not to hand requests a rebuild, and one rebuild settles it.
+    prior_renders = _read(prior, RECENT_RENDERS_PATH)
+    if prior_renders is not None:
+        try:
+            validate_recent_renders(prior_renders)
+        except ValueError as error:
+            raise _invalid(RECENT_RENDERS_PATH, str(error)) from error
 
     _patch_collection(
         output,
@@ -470,10 +483,27 @@ def patch(
     changed = {item.id for item in touched}
     was = list((recent or {}).get("entries", []))
     rows = [row for row in was if str(row["id"]) not in changed]
+    # The hash of a result this release does not touch is only in the document
+    # being served; the hash of one it does touch is in the record it holds,
+    # and supersedes any prior row for that result.
+    hashes = {
+        (str(row["id"]), int(row["version"])): str(row["artifact_tree_sha256"])
+        for row in (prior_renders or {}).get("renders", [])
+    }
     for item in touched:
         current = item.current
         if current is not None:
             _summary, entry = current
             rows.append(recent_row(entry, len(item.active)))
-    write_recent(output, _refilled(was, rows, RECENT_ITEMS))
+            hashes[(entry["id"], entry["version"])] = render_hash(entry)
+    page = _refilled(was, rows, RECENT_ITEMS)
+    try:
+        renders = render_page(page, hashes)
+    except ValueError as error:
+        # A row survived onto the page and its hash is not here to carry over.
+        # Decided before either document is written, so the two are written
+        # together or not at all.
+        raise Rebuild(str(error)) from error
+    write_recent(output, page)
+    write_recent_renders(output, renders)
     return sorted(by_code)

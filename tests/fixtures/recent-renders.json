@@ -1,0 +1,10 @@
+{
+  "renders": [
+    {
+      "artifact_tree_sha256": "559040e70ab9bf424b1cdedd94467c716e49af478eae36f83f30c2348ddbab97",
+      "id": "PALOMAR-2026-08-05-419273",
+      "version": 3
+    }
+  ],
+  "schema_version": 1
+}

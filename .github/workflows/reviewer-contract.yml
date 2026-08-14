@@ -12,13 +12,10 @@ on:
       - "tests/fixtures/**"
       - "requirements-test.txt"
       - ".github/workflows/reviewer-contract.yml"
-  pull_request:
-    paths:
-      - "schema-v2.json"
-      - "tools/**"
-      - "tests/fixtures/**"
-      - "requirements-test.txt"
-      - ".github/workflows/reviewer-contract.yml"
+  # `register` is a required branch-protection context, so every pull request
+  # must create it. A path filter here leaves documentation-only pull requests
+  # permanently blocked with an Expected check that can never start.
+  pull_request: {}
 
 permissions:
   contents: read

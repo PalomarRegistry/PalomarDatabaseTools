@@ -163,74 +163,6 @@ def active_availability(root: pathlib.Path, manifest: pathlib.Path) -> dict[str,
     return _select_active_availability(observed, active)
 
 
-def write_current_availability(
-    client: Any,
-    bucket: str,
-    target: pathlib.Path,
-) -> bool:
-    """Materialize the served manifest, or represent its absence by no file."""
-    raw = _read_object(client, bucket=bucket, key=KEY)
-    if raw is None:
-        # RUNNER_TEMP is normally fresh, but removing a pre-existing target
-        # keeps the filesystem handoff truthful when this command is retried.
-        target.unlink(missing_ok=True)
-        return False
-    pending: pathlib.Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            dir=target.parent,
-            prefix=f".{target.name}.",
-            delete=False,
-        ) as stream:
-            pending = pathlib.Path(stream.name)
-            stream.write(raw)
-        pending.replace(target)
-    finally:
-        if pending is not None:
-            pending.unlink(missing_ok=True)
-    return True
-
-
-def validate_retained_availability(
-    manifest: pathlib.Path,
-    *,
-    now: dt.datetime | None = None,
-) -> None:
-    """Validate a served manifest that an accepted addition leaves unchanged.
-
-    A closed accepted delta cannot withdraw or alter any preservation mapping
-    already represented by the operational manifest. It therefore needs no
-    whole-registry active-row filter, but retaining the object must not make a
-    malformed or over-capacity live document invisible to publication.
-    """
-    raw = manifest.read_bytes()
-    if len(raw) > MAX_MANIFEST_BYTES:
-        raise ValueError(
-            f"served source availability manifest is {len(raw)} bytes; "
-            f"the global delivery budget is {MAX_MANIFEST_BYTES} bytes"
-        )
-    candidate = _decode_manifest(raw, "served source availability manifest")
-    if not isinstance(candidate, dict) or candidate.get("schema_version") != 1:
-        raise ValueError("served source availability manifest has an unsupported schema")
-    if not isinstance(candidate.get("repositories"), list):
-        raise ValueError("served source availability manifest has no repositories array")
-    if parse_timestamp(candidate.get("generated_at")) is None:
-        raise ValueError("served source availability manifest has a malformed generated_at")
-    now = (now or dt.datetime.now(dt.UTC)).astimezone(dt.UTC).replace(microsecond=0)
-    try:
-        normalized = normalize_manifest(candidate, as_of=now)
-        enforce_refresh_capacity(normalized)
-    except ValueError as error:
-        raise ValueError(
-            f"served source availability manifest is invalid: {error}"
-        ) from error
-    revision = candidate.get(REVISION_KEY)
-    if type(revision) is not int or revision < 1:
-        raise ValueError(
-            "served source availability manifest has an invalid publication_revision"
-        )
-
-
 def publish_availability(
     client: Any,
     bucket: str,
@@ -314,10 +246,10 @@ def publish_availability(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    operation = parser.add_mutually_exclusive_group(required=True)
-    operation.add_argument(
+    parser.add_argument(
         "--manifest",
         type=pathlib.Path,
+        required=True,
         help="the observed manifest to filter to the active records of --root and publish",
     )
     parser.add_argument(
@@ -326,24 +258,8 @@ def main() -> int:
         default=pathlib.Path("."),
         help="the canonical database, read with --manifest to decide which rows are active",
     )
-    operation.add_argument(
-        "--write-current",
-        type=pathlib.Path,
-        help="atomically write the manifest being served here, or remove the target "
-        "if none is served, so that the next run can carry forward what it knows",
-    )
-    operation.add_argument(
-        "--validate-retained",
-        type=pathlib.Path,
-        help="validate a served manifest that a closed accepted delta leaves unchanged; "
-        "this operation needs no bucket credentials or canonical record scan",
-    )
     parser.add_argument("--bucket", default=os.environ.get("R2_BUCKET", BUCKET_DEFAULT))
     args = parser.parse_args()
-    if args.validate_retained is not None:
-        validate_retained_availability(args.validate_retained)
-        print("retained source availability is valid")
-        return 0
     account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
     access_key = os.environ.get("R2_ACCESS_KEY_ID")
     secret_key = os.environ.get("R2_SECRET_ACCESS_KEY")
@@ -360,16 +276,10 @@ def main() -> int:
         aws_secret_access_key=secret_key,
         region_name="auto",
     )
-    if args.write_current is not None:
-        present = write_current_availability(client, args.bucket, args.write_current)
-        print("read the manifest being served" if present else "nothing is served yet")
-        return 0
-
     # Filtered here rather than by staging a release. Staging built a tree of
     # every record, render and evidence file in the registry to produce this
     # one small object, four times a day: twenty-five files an entry, copied and
     # hashed, for a file that cross-references none of them.
-    assert args.manifest is not None
     with tempfile.TemporaryDirectory(prefix="palomar-availability-") as directory:
         site = pathlib.Path(directory)
         (site / AVAILABILITY_PATH).write_text(

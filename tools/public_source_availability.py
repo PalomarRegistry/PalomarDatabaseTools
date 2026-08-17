@@ -8,17 +8,21 @@ import hashlib
 import json
 import os
 import pathlib
+import sys
 import urllib.error
 import urllib.request
 from typing import Any
 
 from check_source_availability import (
     ARCHIVE_DEGRADED_EXIT,
+    CAPACITY_EXIT,
     GitHubCommitChecker,
+    INCOMPLETE_EXIT,
     archive_is_degraded,
     build_manifest,
     utc_now,
 )
+from source_availability_contract import enforce_refresh_capacity
 
 DEFAULT_ORIGIN = "https://data.palomar-registry.org"
 USER_AGENT = "Palomar-source-availability/1"
@@ -116,6 +120,29 @@ def main(argv: list[str] | None = None) -> int:
     body = json.dumps(manifest, indent=2, sort_keys=True).encode() + b"\n"
     if args.output:
         args.output.write_bytes(body)
+    # Both refusals belong to the checker, and this writer went without them
+    # when the refresh moved here. A run that exhausted its request budget does
+    # not know whether the sources it never reached are still there, and a
+    # manifest whose own coverage says it needs longer than the freshness
+    # window to come round again is promising a cadence it cannot keep. Neither
+    # may be served, and neither is something the endpoint can see: it checks
+    # that the rows are the target set's, not that the run behind them
+    # finished.
+    #
+    # After the artifact is written rather than before, so that a run which
+    # refuses still leaves the document it would have published to look at.
+    if manifest["coverage"]["budget_exhausted"]:
+        print(
+            "::error::the GitHub request budget was exhausted, so this run does not know "
+            "whether the sources are still there",
+            file=sys.stderr,
+        )
+        return INCOMPLETE_EXIT
+    try:
+        enforce_refresh_capacity(manifest)
+    except ValueError as error:
+        print(f"::error::{error}", file=sys.stderr)
+        return CAPACITY_EXIT
     if not args.no_publish:
         token = os.environ.get("PALOMAR_AVAILABILITY_UPDATE_TOKEN", "")
         if len(token) < 32:

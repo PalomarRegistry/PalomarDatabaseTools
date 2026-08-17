@@ -36,10 +36,14 @@ def main() -> int:
     # boto3 is deliberately lazy because only the credentialed operation needs
     # it. Import it explicitly with every availability module so CI exercises
     # the complete command's environment without touching R2 or the network.
+    # That operation is publishing the target set: the manifest itself is
+    # refreshed over HTTPS through the Worker and reaches the bucket with no
+    # credential of its own.
     for module in (
         "boto3",
         "check_source_availability",
-        "publish_availability",
+        "public_source_availability",
+        "publish_availability_targets",
         "source_availability_contract",
     ):
         importlib.import_module(module)

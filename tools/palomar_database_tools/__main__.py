@@ -13,7 +13,6 @@ COMMANDS = frozenset(
         "lock-tool-requirements",
         "publication-evidence",
         "public-source-availability",
-        "publish-availability",
         "publish-availability-targets",
         "publish-snapshot",
         "release-delta",

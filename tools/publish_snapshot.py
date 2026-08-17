@@ -59,10 +59,11 @@ STABLE_PREFIXES = (
     "browse/", "feeds/", "registration-identities/", "repositories/", "search/",
     "subjects/", "tombstones/", "versions/"
 )
-# Owned by `publish_availability.py`, which writes it independently and never
-# puts it in a snapshot staging tree. This publisher must not withdraw it merely
-# because its own stager did not produce it: that is the difference between a
-# path it owns and a path it only shares a bucket with.
+# Written independently and never put in a snapshot staging tree: the manifest
+# by the Worker's `_operations/source-availability` endpoint, the target set by
+# `publish_availability_targets.py`. This publisher must not withdraw either
+# merely because its own stager did not produce it: that is the difference
+# between a path it owns and a path it only shares a bucket with.
 UNOWNED_PATHS = (AVAILABILITY_PATH, AVAILABILITY_TARGETS_PATH)
 # The stable documents every release writes, whatever the registry holds. A
 # release that named one of these has not retired it, it has failed to write

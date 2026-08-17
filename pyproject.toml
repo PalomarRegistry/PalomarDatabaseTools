@@ -26,7 +26,7 @@ py-modules = [
   "changed_records", "check_append_only", "check_published",
   "check_source_availability", "day_pages", "entry_validation",
   "evidence_validation", "lock_tool_requirements", "patch_surfaces",
-  "publication_evidence", "public_source_availability", "publish_availability",
+  "publication_evidence", "public_source_availability",
   "publish_availability_targets", "publish_snapshot",
   "registration_projection", "release_delta", "render_validation",
   "schema_policy", "score_validation", "selection", "smoke_source_availability",

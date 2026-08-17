@@ -488,6 +488,19 @@ def test_source_contact_state_is_not_duplicated_outside_endorsement(db):
     assert any("author_contacted" in error and "not allowed" in error for error in errors)
 
 
+def test_descriptive_provenance_fields_accept_bounded_free_text(db):
+    data = db.entry_data("PALOMAR-2026-07-29-000002", 1)
+    data["provenance"]["mathematical_sources"][0]["author_endorsement"] = (
+        "reviewed an early draft"
+    )
+    data["provenance"]["related_formalizations"] = [{
+        "identifier": "https://example.com/formalization",
+        "relationship": "shares its computational infrastructure",
+    }]
+    db.install_entry(data)
+    assert validate(db.path) == []
+
+
 def test_schema_v5_requires_consistent_repository_license_evidence(db):
     data = db.entry_data(
         "PALOMAR-2026-07-29-000002",

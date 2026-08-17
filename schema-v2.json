@@ -227,14 +227,9 @@
                 "maxLength": 500
               },
               "author_endorsement": {
-                "enum": [
-                  "participated",
-                  "endorsed",
-                  "no-response",
-                  "not-contacted",
-                  "declined",
-                  "n/a"
-                ]
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
               }
             }
           }
@@ -255,13 +250,9 @@
                 "maxLength": 2048
               },
               "relationship": {
-                "enum": [
-                  "builds-on",
-                  "adapts",
-                  "independent",
-                  "supersedes",
-                  "other"
-                ]
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
               },
               "note": {
                 "type": "string",

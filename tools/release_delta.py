@@ -50,11 +50,12 @@ BASE_SCHEMA = 1
 # object per classification code; 2 is paging by the day a result was
 # registered; 3 makes the landing projection self-contained; 4 adds the
 # bounded repository and exact registration-identity lookups used by intake;
-# 5 adds the bounded active source-commit set to each exact identity lookup.
+# 5 adds the bounded active source-commit set to each exact identity lookup;
+# 6 labels the registered-status version-index contract as schema version 2.
 # Unchanged rows cannot be upgraded by an incremental release, because that
 # release has only the records it touched, so the first release in any new
 # layout rebuilds it.
-SURFACES = 5
+SURFACES = 6
 MODULUS = 1 << 256
 
 

@@ -30,7 +30,7 @@ const PUBLIC_PATHS = [
   // surfaces are derived from, is not part of a release, and is not served:
   // it was the one served object whose size was the registry's.
   /^\/(?:feed\.xml|recent(?:-renders)?\.json|source-availability(?:-targets)?\.json|LICENSE)$/,
-  /^\/schema-v2\.json$/,
+  /^\/schema-v3\.json$/,
   new RegExp(`^/entries/${VERSIONED}\\.json$`),
   new RegExp(`^/tombstones/${VERSIONED}\\.json$`),
   // Every version of one result. An entry page reads this instead of the whole

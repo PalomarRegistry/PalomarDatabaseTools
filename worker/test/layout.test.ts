@@ -91,12 +91,12 @@ describe("serving", () => {
 
   it("serves only the current entry schema", async () => {
     const bucket = new FakeBucket();
-    bucket.put(`snapshots/${release}/schema-v2.json`, '{"title":"current"}\n');
-    bucket.put(`snapshots/${release}/schema-v1.json`, '{"title":"obsolete"}\n');
+    bucket.put(`snapshots/${release}/schema-v3.json`, '{"title":"current"}\n');
+    bucket.put(`snapshots/${release}/schema-v2.json`, '{"title":"obsolete"}\n');
 
-    expect((await worker.fetch(request("/schema-v2.json"), env(bucket))).status).toBe(200);
+    expect((await worker.fetch(request("/schema-v3.json"), env(bucket))).status).toBe(200);
     const readsAfterCurrent = [...bucket.reads];
-    expect((await worker.fetch(request("/schema-v1.json"), env(bucket))).status).toBe(404);
+    expect((await worker.fetch(request("/schema-v2.json"), env(bucket))).status).toBe(404);
     expect(bucket.reads).toEqual(readsAfterCurrent);
   });
 

@@ -566,7 +566,13 @@ def _launched(database: pathlib.Path) -> bool:
     return (database / LAUNCH_MARKER).exists()
 
 
-def _removals(existing: dict[str, int], staged_keys: set[str], tombstoned: set[str]) -> list[str]:
+def _removals(
+    existing: dict[str, int],
+    staged_keys: set[str],
+    tombstoned: set[str],
+    *,
+    authorized: frozenset[str] = frozenset(),
+) -> list[str]:
     """Which stable keys this publication takes away, and why it may.
 
     A *record* leaves the staged set for exactly two reasons: it was taken
@@ -586,6 +592,9 @@ def _removals(existing: dict[str, int], staged_keys: set[str], tombstoned: set[s
     for key in sorted(existing):
         if key in staged_keys or key in unowned:
             continue
+        if key in authorized:
+            doomed.append(key)
+            continue
         relative = key[len(PUBLIC_PREFIX) :]
         match = RECORD_RE.match(relative)
         if match is None:
@@ -603,6 +612,95 @@ def _removals(existing: dict[str, int], staged_keys: set[str], tombstoned: set[s
             + "\n".join(sorted(set(unexplained)))
         )
     return doomed
+
+
+def _replacement_plan(
+    manifest_path: pathlib.Path,
+    staged: list[tuple[str, str, str]],
+) -> tuple[dict[str, tuple[str, str]], dict[str, str]]:
+    """Validate the one declared review-language record replacement.
+
+    This is deliberately not a general override for immutable records. The
+    manifest contract names the exact migration, old and new entry digests,
+    and old and new content-addressed evidence roots. The ordinary publisher
+    remains create-only for every path not returned here.
+    """
+    try:
+        manifest = json.loads(manifest_path.read_bytes())
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(f"record replacement manifest is unreadable: {error}") from error
+    if (
+        not isinstance(manifest, dict)
+        or set(manifest) != {"schema_version", "migration", "database_changes"}
+        or manifest.get("schema_version") != 1
+        or manifest.get("migration") != "review-language-v3"
+        or not isinstance(manifest.get("database_changes"), list)
+        or not manifest["database_changes"]
+    ):
+        raise RuntimeError("record replacement manifest has an unsupported contract")
+
+    staged_rows = {relative: (digest, kind) for relative, digest, kind in staged}
+    replacements: dict[str, tuple[str, str]] = {}
+    retired_prefixes: dict[str, str] = {}
+    row_fields = {
+        "entry",
+        "old_entry_sha256",
+        "new_entry_sha256",
+        "old_review_sha256",
+        "new_review_sha256",
+        "old_evidence_tree_sha256",
+        "new_evidence_tree_sha256",
+    }
+    digest_fields = row_fields - {"entry"}
+    for position, row in enumerate(manifest["database_changes"]):
+        if not isinstance(row, dict) or set(row) != row_fields:
+            raise RuntimeError(
+                f"record replacement manifest row {position} is malformed"
+            )
+        if any(
+            not isinstance(row[field], str)
+            or re.fullmatch(r"[0-9a-f]{64}", row[field]) is None
+            for field in digest_fields
+        ):
+            raise RuntimeError(
+                f"record replacement manifest row {position} has an invalid digest"
+            )
+        entry = row["entry"]
+        match = (
+            re.fullmatch(rf"entries/({VERSIONED})\.json", entry)
+            if isinstance(entry, str)
+            else None
+        )
+        if match is None or entry in replacements:
+            raise RuntimeError(
+                f"record replacement manifest row {position} has an invalid or duplicate entry"
+            )
+        old_digest = row["old_entry_sha256"]
+        new_digest = row["new_entry_sha256"]
+        if old_digest == new_digest or staged_rows.get(entry) != (new_digest, "immutable"):
+            raise RuntimeError(f"record replacement does not match the staged entry: {entry}")
+
+        stem = match.group(1)
+        old_tree = row["old_evidence_tree_sha256"]
+        new_tree = row["new_evidence_tree_sha256"]
+        old_prefix = f"evidence/{stem}/{old_tree}/"
+        new_prefix = f"evidence/{stem}/{new_tree}/"
+        new_evidence = [
+            path
+            for path, (_digest, kind) in staged_rows.items()
+            if kind == "immutable" and path.startswith(new_prefix)
+        ]
+        if old_tree == new_tree or not new_evidence:
+            raise RuntimeError(f"record replacement has no new evidence tree: {entry}")
+        new_review = staged_rows.get(new_prefix + "review.json")
+        if new_review != (row["new_review_sha256"], "immutable"):
+            raise RuntimeError(f"record replacement does not match its staged review: {entry}")
+        if any(path.startswith(old_prefix) for path in staged_rows):
+            raise RuntimeError(f"record replacement still stages its old evidence tree: {entry}")
+        replacements[entry] = (old_digest, new_digest)
+        retired_prefixes[f"{PUBLIC_PREFIX}{old_prefix}"] = row["old_review_sha256"]
+
+    return replacements, dict(sorted(retired_prefixes.items()))
 
 
 def _delete_old_snapshots(client: Any, bucket: str, keep: set[str]) -> None:
@@ -705,7 +803,11 @@ def _declared_removals(delta: dict[str, Any]) -> list[str]:
 
 
 def publish_snapshot(
-    client: Any, bucket: str, site: pathlib.Path, database: pathlib.Path | None = None
+    client: Any,
+    bucket: str,
+    site: pathlib.Path,
+    database: pathlib.Path | None = None,
+    record_replacements: pathlib.Path | None = None,
 ) -> str:
     launched = _launched(database) if database is not None else True
     _assert_conditional_writes(client, bucket)
@@ -747,6 +849,15 @@ def publish_snapshot(
     immutable = [row for row in staged if row[2] == "immutable"]
     stable = [row for row in staged if row[2] == "stable"]
     snapshot = [row for row in staged if row[2] == "snapshot"]
+
+    replacements: dict[str, tuple[str, str]] = {}
+    retired_prefixes: dict[str, str] = {}
+    if record_replacements is not None:
+        if incremental:
+            raise RuntimeError("record replacements require a full release")
+        replacements, retired_prefixes = _replacement_plan(
+            record_replacements.resolve(), staged
+        )
 
     # Offered whether or not it is already there. R2 refuses the taken ones and
     # the readback settles whether what is there is what this release says, so
@@ -791,14 +902,29 @@ def publish_snapshot(
                 for key in existing
                 if (match := RECORD_RE.match(key[len(PUBLIC_PREFIX):]))
             }
-        doomed = _removals(existing, staged_keys, tombstoned)
+        for prefix, old_review_digest in retired_prefixes.items():
+            old_review = _read_object(client, bucket, prefix + "review.json")
+            if old_review is not None and _sha256(old_review) != old_review_digest:
+                raise RuntimeError(
+                    f"record replacement origin review does not match its manifest: {prefix}"
+                )
+        authorized = frozenset(
+            key
+            for key in existing
+            if any(key.startswith(prefix) for prefix in retired_prefixes)
+        )
+        doomed = _removals(
+            existing, staged_keys, tombstoned, authorized=authorized
+        )
 
     # Written and read back one at a time, so that a publication holds one
     # object rather than the whole release. The readback is not deferred to a
     # second pass any more: keeping the bytes to compare against later is
     # exactly the thing that made memory grow with the dataset.
     created = 0
-    for relative, digest in write:
+    ordinary = [row for row in write if row[0] not in replacements]
+    replacing = [row for row in write if row[0] in replacements]
+    for relative, digest in ordinary:
         data = _staged_bytes(site, relative, digest)
         key = f"{PUBLIC_PREFIX}{relative}"
         if _put_object(client, bucket, key, data, digest, relative, create_only=True):
@@ -834,6 +960,23 @@ def publish_snapshot(
     delta_key = f"{SNAPSHOT_PREFIX}{release}/{MANIFEST_PATH}"
     _put_object(client, bucket, delta_key, delta_bytes, _sha256(delta_bytes), MANIFEST_PATH)
     _verify(client, bucket, delta_key, delta_bytes, _sha256(delta_bytes))
+
+    # The new evidence, derived pages, schema and release metadata are all
+    # present now. Rebind the stable entry keys as late as possible before the
+    # pointer flip. A retry may find either the manifested old bytes or the
+    # already-written new bytes; anything else is drift and stops before an
+    # overwrite.
+    for relative, digest in replacing:
+        data = _staged_bytes(site, relative, digest)
+        key = f"{PUBLIC_PREFIX}{relative}"
+        current = _read_object(client, bucket, key)
+        allowed = replacements[relative]
+        if current is None or _sha256(current) not in allowed:
+            raise RuntimeError(
+                f"record replacement origin does not match its manifest: {relative}"
+            )
+        _put_object(client, bucket, key, data, digest, relative)
+        _verify(client, bucket, key, data, digest)
 
     # Before the flip, so that a crash here leaves a record already gone rather
     # than an index that says it is gone while it is still being served.
@@ -989,6 +1132,12 @@ def main() -> int:
         default=pathlib.Path("."),
         help="the canonical database, read only to see whether it has launched",
     )
+    parser.add_argument(
+        "--record-replacements",
+        type=pathlib.Path,
+        help="the one-time review-language-v3 migration manifest authorizing exact "
+        "old-to-new entry and evidence replacements",
+    )
     parser.add_argument("--audit", action="store_true", help="report drift and change nothing")
     parser.add_argument(
         "--reconcile",
@@ -1020,6 +1169,8 @@ def main() -> int:
         parser.error("--reconcile needs the full rebuild to compare against, in --site")
     if args.fetch_prior is not None and args.into is None:
         parser.error("--fetch-prior needs somewhere to put them, in --into")
+    if reading_only and args.record_replacements is not None:
+        parser.error("--record-replacements is valid only for a publication")
     if not reading_only and not args.reconcile and args.site is None:
         parser.error("--site is required unless --audit or --write-current-base is given")
     account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
@@ -1097,7 +1248,13 @@ def main() -> int:
             print(line)
         print(f"audit found {len(problems)} problem(s)")
         return 1 if problems else 0
-    release = publish_snapshot(client, args.bucket, args.site, args.database)
+    release = publish_snapshot(
+        client,
+        args.bucket,
+        args.site,
+        args.database,
+        args.record_replacements,
+    )
     print(f"published release {release}")
     return 0
 

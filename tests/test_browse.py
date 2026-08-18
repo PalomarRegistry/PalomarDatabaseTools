@@ -87,7 +87,7 @@ def test_a_page_says_which_day_and_band_it_is(db, tmp_path):
     stage_public(db.path, site)
 
     page = _page(site, "2026-07-29", 1)
-    assert (page["schema_version"], page["day"], page["page"]) == (1, "2026-07-29", 1)
+    assert (page["schema_version"], page["day"], page["page"]) == (2, "2026-07-29", 1)
 
 
 def test_the_rows_are_the_ones_the_index_carries(db, tmp_path):
@@ -139,7 +139,7 @@ def test_the_year_document_names_every_day_and_the_pages_that_day_uses(db, tmp_p
     stage_public(db.path, site)
 
     year = _year(site, "2026")
-    assert year["schema_version"] == 1 and year["year"] == "2026"
+    assert year["schema_version"] == 2 and year["year"] == "2026"
     assert year["days"] == [
         {
             "day": "2026-07-29",
@@ -313,12 +313,12 @@ def test_a_result_accepted_on_a_day_already_past_still_costs_one_page(repo, tmp_
     What this layout rests on is not that appends only ever touch today; it is
     that one write touches one page, which an append to a past day does.
     """
-    repo.add_entry("PALOMAR-2026-07-29-000001", 1, accepted_at="2026-07-29")
-    repo.add_entry("PALOMAR-2026-08-05-000001", 1, accepted_at="2026-08-05")
+    repo.add_entry("PALOMAR-2026-07-29-000001", 1, first_registered_on="2026-07-29")
+    repo.add_entry("PALOMAR-2026-08-05-000001", 1, first_registered_on="2026-08-05")
     repo.commit("two days")
     previous = _stage(repo.path, tmp_path / "base")
 
-    repo.add_entry("PALOMAR-2026-07-29-000002", 1, accepted_at="2026-07-29")
+    repo.add_entry("PALOMAR-2026-07-29-000002", 1, first_registered_on="2026-07-29")
     repo.commit("registered later, under the earlier day")
     delta = _stage(repo.path, tmp_path / "next", previous=previous)
 

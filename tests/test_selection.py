@@ -19,7 +19,7 @@ def _entry(**overrides):
     entry = {
         "id": "PALOMAR-2026-07-29-000001",
         "version": 1,
-        "accepted_at": "2026-07-29",
+        "first_registered_on": "2026-07-29",
         "registered_at": "2026-07-29T09:14:07Z",
         "review": {"reviewed_at": "2026-07-28T12:57:32Z"},
     }

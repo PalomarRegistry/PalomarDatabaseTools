@@ -43,7 +43,7 @@ FULL_REBUILD_INPUTS = frozenset(
     {
         "LICENSE",
         "requirements-tools.txt",
-        "schema-v2.json",
+        "schema-v3.json",
         "scores-v1.json",
         "takedowns.json",
         ".github/workflows/publish.yml",
@@ -93,10 +93,10 @@ PUBLIC_REVIEW_KEYS = frozenset({
     "policy_commit",
     "reviewed_at",
     "reviewer_models",
-    "decision",
+    "outcome",
     "summary",
     "requested_changes",
-    "passes",
+    "checks",
 })
 PUBLIC_REVIEW_SOURCE_KEYS = frozenset({"repository", "commit"})
 # `scores` is absent deliberately, and so is `severity` below: those are what
@@ -104,7 +104,7 @@ PUBLIC_REVIEW_SOURCE_KEYS = frozenset({"repository", "commit"})
 # the evidence for one, which is what the registry exists to show.
 PUBLIC_REVIEW_PASS_KEYS = frozenset({
     "step",
-    "verdict",
+    "outcome",
     "summary",
     "findings",
     "trust_level",
@@ -171,17 +171,17 @@ def _assert_redacted_review(path: pathlib.Path) -> None:
     ):
         raise ValueError("public evidence review declares no schema version")
     for key, value in review.items():
-        if key not in ("source", "passes", "schema_version"):
+        if key not in ("source", "checks", "schema_version"):
             _assert_public_leaf(value, f"review.{key}")
     if "source" in review:
         source = _assert_public_keys(review["source"], PUBLIC_REVIEW_SOURCE_KEYS, "review.source")
         for key, value in source.items():
             _assert_public_leaf(value, f"review.source.{key}")
-    passes = review.get("passes")
-    if not isinstance(passes, list):
-        raise ValueError("public evidence review has no passes array")
-    for position, step in enumerate(passes):
-        where = f"review.passes[{position}]"
+    checks = review.get("checks")
+    if not isinstance(checks, list):
+        raise ValueError("public evidence review has no checks array")
+    for position, step in enumerate(checks):
+        where = f"review.checks[{position}]"
         step = _assert_public_keys(step, PUBLIC_REVIEW_PASS_KEYS, where)
         for key, value in step.items():
             if key != "findings":
@@ -285,11 +285,11 @@ def _versions_of(
 ) -> tuple[dict[str, Any], list[tuple[dict[str, Any], dict[str, Any]]]]:
     """Every version of one result from its bounded registration projection."""
     result = registration_projection.load_result(root, identifier)
-    accepted_at = str(result["accepted_at"])
+    first_registered_on = str(result["first_registered_on"])
     versions = [
         (
             registration_projection.public_summary(row, identifier),
-            registration_projection.entry_view(row, identifier, accepted_at),
+            registration_projection.entry_view(row, identifier, first_registered_on),
         )
         for row in result["versions"]
     ]

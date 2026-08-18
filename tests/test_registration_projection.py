@@ -134,14 +134,14 @@ def test_result_presentation_rows_have_closed_types(db, field, value, complaint)
 def test_projection_dates_must_be_real_calendar_dates():
     with pytest.raises(ValueError, match="date disagrees with its path"):
         registration_projection._validate_day_shape(
-            {"schema_version": 1, "date": "2026-02-30", "last_serial": 1},
+            {"schema_version": 2, "date": "2026-02-30", "last_serial": 1},
             "2026-02-30",
             "registrations/days/2026-02-30.json",
         )
     result = {
-        "schema_version": 1,
+        "schema_version": 2,
         "id": "PALOMAR-2026-02-30-000001",
-        "accepted_at": "2026-02-30",
+        "first_registered_on": "2026-02-30",
         "identity": {
             "source_repository": "https://example.invalid/source",
             "project_path": None,
@@ -149,7 +149,7 @@ def test_projection_dates_must_be_real_calendar_dates():
         },
         "versions": [],
     }
-    with pytest.raises(ValueError, match="accepted_at disagrees with id"):
+    with pytest.raises(ValueError, match="first_registered_on disagrees with id"):
         registration_projection._validate_result_shape(
             result, result["id"], "registrations/results/impossible.json"
         )
@@ -163,12 +163,12 @@ def test_scoped_validation_rejects_ambiguous_json_in_the_validated_base(
     encoded = json.dumps(repo.read_json(relative), indent=2, sort_keys=True) + "\n"
     if malformation == "duplicate":
         encoded = encoded.replace(
-            '"schema_version": 1',
-            '"schema_version": 1,\n  "schema_version": 1',
+            '"schema_version": 2',
+            '"schema_version": 2,\n  "schema_version": 2',
             1,
         )
     else:
-        encoded = encoded.replace('"schema_version": 1', '"schema_version": NaN', 1)
+        encoded = encoded.replace('"schema_version": 2', '"schema_version": NaN', 1)
     repo.write(relative, encoded)
     base = repo.commit("an ambiguous projection in the claimed validated base")
     repo.add_entry(FIRST, 2)

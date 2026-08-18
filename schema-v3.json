@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://data.palomar-registry.org/schema-v2.json",
-  "title": "Palomar accepted record",
+  "$id": "https://data.palomar-registry.org/schema-v3.json",
+  "title": "Palomar registered record",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
     "id",
-    "accepted_at",
+    "first_registered_on",
     "registered_at",
     "version",
     "status",
@@ -27,27 +27,27 @@
   ],
   "properties": {
     "schema_version": {
-      "const": 2
+      "const": 3
     },
     "id": {
       "type": "string",
       "pattern": "^PALOMAR-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{6}$"
     },
-    "accepted_at": {
+    "first_registered_on": {
       "type": "string",
       "format": "date",
       "description": "The day the result entered the registry. It belongs to the result rather than to any one version of it: it is the date the identifier carries, it decides the browse page, and every later version inherits it. It is the day part of version 1's registered_at, which the validator checks, because two fields that must agree and are written in different places otherwise drift."
     },
     "registered_at": {
       "$ref": "#/$defs/timestamp",
-      "description": "The moment this version was registered, which is the moment the submitter's consent was acted on. Every ordering surface reads this and nothing else: recent.json, the feeds and the subject pages. It is per version, because a v2 is a new registration and has to sort as news, where accepted_at would put it among its siblings from the year of the v1. It is not review.reviewed_at, which is when the verdict was reached and may be days earlier, since nothing is registered until the submitter has read their review and consented."
+      "description": "The moment this version was registered, which is the moment the submitter's consent was acted on. Every ordering surface reads this and nothing else: recent.json, the feeds and the subject pages. It is per version, because a v2 is a new registration and has to sort as news, where first_registered_on would put it among its siblings from the year of the v1. It is not review.reviewed_at, which is when the outcome was reached and may be days earlier, since nothing is registered until the submitter has read their review and consented."
     },
     "version": {
       "type": "integer",
       "minimum": 1
     },
     "status": {
-      "const": "accepted"
+      "const": "registered"
     },
     "title": {
       "type": "string",
@@ -713,11 +713,11 @@
     "review": {
       "type": "object",
       "additionalProperties": false,
-      "description": "The review that decided this version. The scores behind the verdict are not here, and are not published: the same repository at the same commit has scored 5 and then 4 on the same axis across two runs of the same policy, so the numbers do not mean what a reader would take them to mean. They are recorded beside the database, under scores/, so the decision stays reconstructable. The verdict they produced is here, and it is stable.",
+      "description": "The automatic review attached to this version. Its scores are not published: the same repository at the same commit has scored 5 and then 4 on the same axis across two runs of the same policy, so the numbers do not mean what a reader would take them to mean. They are recorded beside the database, under scores/, so the outcome stays reconstructable. The outcome recorded here means that no blocking problems were identified.",
       "required": [
         "reviewed_at",
         "policy_commit",
-        "verdict",
+        "outcome",
         "reviewer_models",
         "warnings",
         "report"
@@ -729,8 +729,8 @@
         "policy_commit": {
           "$ref": "#/$defs/sha"
         },
-        "verdict": {
-          "const": "accept"
+        "outcome": {
+          "const": "neutral"
         },
         "reviewer_models": {
           "type": "array",

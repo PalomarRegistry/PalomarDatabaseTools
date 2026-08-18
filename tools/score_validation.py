@@ -98,7 +98,7 @@ def validate_scores(
     """Check `scores/`, which is recorded but never served.
 
     The scores decide whether a version is registered, so they have to survive
-    for the decision to be reconstructable. They are not part of the record,
+    for the review outcome to be reconstructable. They are not part of the record,
     because a record's bytes have to be a function of the commit -- while the
     publisher projected them away, the same commit could serve different bytes
     after a publisher change, which is exactly what happened twice.

@@ -52,7 +52,7 @@
     "/subjects/msc/11A05/2026-08-07/1.json": "stable",
     "/tombstones/PALOMAR-2026-08-07-383237-v1.json": "stable",
 
-    "/schema-v2.json": "snapshot",
+    "/schema-v3.json": "snapshot",
     "/LICENSE": "snapshot",
     "/release-delta.json": "snapshot",
 

@@ -1,10 +1,10 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "id": "PALOMAR-2026-08-05-419273",
-  "accepted_at": "2026-07-29",
+  "first_registered_on": "2026-07-29",
   "registered_at": "2026-07-29T09:14:07Z",
   "version": 3,
-  "status": "accepted",
+  "status": "registered",
   "title": "Uniform-constant Erd\u0151s unit-distance conjecture is false",
   "abstract": "For every C > 0 and every N there exist n \u2265 N and an n-point set P \u2286 \u211d\u00b2 whose number of unit-distance pairs exceeds n^(1 + C / log log n). This refutes Erd\u0151s's 1946 conjectured bound \u03bd(n) \u2264 n^(1 + C/log log n) for an absolute constant C. The theorem quantifies over C > 0; this is harmless because any bound with C \u2264 0 would imply the corresponding bound for a positive C.\n",
   "authors": [
@@ -416,7 +416,7 @@
     "reviewer_models": [
       "claude:default"
     ],
-    "verdict": "accept",
+    "outcome": "neutral",
     "warnings": [
       "The formalized statement is the uniform-constant refutation (for every C > 0 and every N there are n >= N and an n-point planar set with more than n^(1 + C / log log n) unit distances). It is strictly weaker than, and an immediate consequence of, the previously published fixed-power disproof. The metadata states this limitation plainly in result.scope_limitations and makes no novelty claim; the record asserts no priority.",
       "The principal informal source is an X post (https://x.com/__alpoge__/status/2064409100562366543) whose only durable copy cited in the record is a transcription hosted in the submitter's own proof repository. The record describes that transcription as exact without stating who checked it against the original or how, so the bibliographic anchor for the argument being formalized is weaker than the rest of the provenance.",

@@ -54,7 +54,7 @@ jobs:
             --no-deps dist/runtime/*.whl
           "$RUNNER_TEMP/runtime/bin/python" -m palomar_database_tools 2>&1 | grep '^usage:'
           mkdir "$RUNNER_TEMP/smoke-database"
-          cp schema-v2.json "$RUNNER_TEMP/smoke-database/schema-v2.json"
+          cp schema-v3.json "$RUNNER_TEMP/smoke-database/schema-v3.json"
           cp tests/fixtures/synthetic-scores-schema.json \
             "$RUNNER_TEMP/smoke-database/scores-v1.json"
           (cd "$RUNNER_TEMP/smoke-database" && \

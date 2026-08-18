@@ -39,7 +39,7 @@ def test_identity_digest_has_the_documented_preimage():
     assert lookups.identity_digest(value) == expected
 
 
-@pytest.mark.parametrize("repository", ["../schema-v2", "owner/..", "./name", "owner/."])
+@pytest.mark.parametrize("repository", ["../schema-v3", "owner/..", "./name", "owner/."])
 def test_repository_paths_refuse_navigation_segments(repository):
     with pytest.raises(ValueError, match="malformed"):
         lookups.repository_path(repository)
@@ -73,7 +73,7 @@ def test_full_build_writes_repository_and_exact_identity_documents(tmp_path):
 
     repository = load(tmp_path, "repositories/owner/repository.json")
     assert repository == {
-        "schema_version": 1,
+        "schema_version": 2,
         "repository": "owner/repository",
         "registrations_total": 3,
         "truncated": False,

@@ -28,8 +28,8 @@ from schema_policy import (
     validate_closed_schema_references,
 )
 
-ENTRY_SCHEMA_VERSION = 2
-ENTRY_SCHEMA_NAME = "schema-v2.json"
+ENTRY_SCHEMA_VERSION = 3
+ENTRY_SCHEMA_NAME = "schema-v3.json"
 ENTRY_SCHEMA_EVALUATION_ERROR = (
     f"{ENTRY_SCHEMA_NAME}: entry schema cannot be evaluated safely"
 )

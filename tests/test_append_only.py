@@ -147,38 +147,38 @@ def test_deleting_published_verification_evidence_is_forbidden(repo):
 
 
 def test_adding_the_entry_schema_after_launch_is_forbidden(repo):
-    schema = repo.read_json("schema-v2.json")
-    repo.remove("schema-v2.json")
+    schema = repo.read_json("schema-v3.json")
+    repo.remove("schema-v3.json")
     repo.commit("launch state missing its entry schema")
-    repo.write_json("schema-v2.json", schema)
+    repo.write_json("schema-v3.json", schema)
     errors = violations(repo)
     assert any(
-        "schema-v2.json" in error and "added after launch" in error
+        "schema-v3.json" in error and "added after launch" in error
         for error in errors
     )
 
 
 def test_the_entry_schema_remains_disposable_before_launch(repo):
-    schema = repo.read_json("schema-v2.json")
-    repo.remove("schema-v2.json")
+    schema = repo.read_json("schema-v3.json")
+    repo.remove("schema-v3.json")
     repo.remove(".palomar-launched")
     repo.commit("pre-launch state without an entry schema")
-    repo.write_json("schema-v2.json", schema)
+    repo.write_json("schema-v3.json", schema)
     assert violations(repo) == []
 
 
 def test_modifying_the_entry_schema_is_forbidden(repo):
-    schema = repo.read_json("schema-v2.json")
+    schema = repo.read_json("schema-v3.json")
     schema["properties"]["title"]["maxLength"] = 400
-    repo.write_json("schema-v2.json", schema)
+    repo.write_json("schema-v3.json", schema)
     errors = violations(repo)
-    assert any("schema-v2.json" in error and "frozen" in error for error in errors)
+    assert any("schema-v3.json" in error and "frozen" in error for error in errors)
 
 
 def test_deleting_the_entry_schema_is_forbidden(repo):
-    repo.remove("schema-v2.json")
+    repo.remove("schema-v3.json")
     errors = violations(repo)
-    assert any("schema-v2.json" in error and "frozen" in error for error in errors)
+    assert any("schema-v3.json" in error and "frozen" in error for error in errors)
 
 
 # Published files must be ordinary files.
@@ -193,10 +193,10 @@ def test_a_symlinked_entry_is_forbidden(repo):
 
 
 def test_a_symlinked_schema_is_forbidden(repo):
-    repo.remove("schema-v2.json")
-    (repo.path / "schema-v2.json").symlink_to("README.md")
+    repo.remove("schema-v3.json")
+    (repo.path / "schema-v3.json").symlink_to("README.md")
     errors = violations(repo)
-    assert any("schema-v2.json" in error and "symbolic link" in error for error in errors)
+    assert any("schema-v3.json" in error and "symbolic link" in error for error in errors)
 
 
 def test_a_submodule_in_entries_is_forbidden(repo):

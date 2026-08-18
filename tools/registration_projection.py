@@ -22,7 +22,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 RESULTS_DIRECTORY = "registrations/results"
 SUBMISSIONS_DIRECTORY = "registrations/submissions"
 DAYS_DIRECTORY = "registrations/days"
@@ -161,12 +161,12 @@ def public_summary(row: Mapping[str, Any], identifier: str) -> dict[str, Any]:
     }
 
 
-def entry_view(row: Mapping[str, Any], identifier: str, accepted_at: str) -> dict[str, Any]:
+def entry_view(row: Mapping[str, Any], identifier: str, first_registered_on: str) -> dict[str, Any]:
     """Projection fields needed to patch historical presentation surfaces."""
     return {
         "id": identifier,
         "version": row.get("version"),
-        "accepted_at": accepted_at,
+        "first_registered_on": first_registered_on,
         "registered_at": row.get("registered_at"),
         "title": row.get("title"),
         "status": row.get("status"),
@@ -219,21 +219,21 @@ def documents_for_entries(
     for identifier, rows in by_result.items():
         rows.sort(key=lambda item: int(item[1].get("version", 0)))
         first = rows[0][1]
-        accepted_at = first.get("accepted_at")
+        first_registered_on = first.get("first_registered_on")
         identity = _identity(first)
         if enforce_contract and [entry.get("version") for _relative, entry in rows] != list(
             range(1, len(rows) + 1)
         ):
             raise ValueError(f"{result_path(identifier)}: versions are not contiguous from 1")
         if enforce_contract and any(
-            entry.get("accepted_at") != accepted_at or _identity(entry) != identity
+            entry.get("first_registered_on") != first_registered_on or _identity(entry) != identity
             for _relative, entry in rows
         ):
             raise ValueError(f"{result_path(identifier)}: stable registration identity changed")
         result = {
             "schema_version": SCHEMA_VERSION,
             "id": identifier,
-            "accepted_at": accepted_at,
+            "first_registered_on": first_registered_on,
             "identity": identity,
             "versions": [version_summary(relative, entry) for relative, entry in rows],
         }
@@ -286,20 +286,20 @@ def load_result(root: pathlib.Path, identifier: str) -> dict[str, Any]:
 
 
 def _validate_result_shape(document: Mapping[str, Any], identifier: str, where: str) -> None:
-    if set(document) != {"schema_version", "id", "accepted_at", "identity", "versions"}:
+    if set(document) != {"schema_version", "id", "first_registered_on", "identity", "versions"}:
         raise ValueError(f"{where}: has an unsupported result projection shape")
     if type(document.get("schema_version")) is not int or document["schema_version"] != SCHEMA_VERSION:
         raise ValueError(f"{where}: unsupported schema_version")
     if document.get("id") != identifier:
         raise ValueError(f"{where}: id disagrees with its path")
-    accepted_at = document.get("accepted_at")
+    first_registered_on = document.get("first_registered_on")
     identifier_parts = ID_PARTS_RE.fullmatch(identifier)
     if (
-        not _calendar_day(accepted_at)
+        not _calendar_day(first_registered_on)
         or identifier_parts is None
-        or identifier_parts.group(1) != accepted_at
+        or identifier_parts.group(1) != first_registered_on
     ):
-        raise ValueError(f"{where}: accepted_at disagrees with id")
+        raise ValueError(f"{where}: first_registered_on disagrees with id")
     identity = document.get("identity")
     if not isinstance(identity, dict) or set(identity) != {
         "source_repository", "project_path", "comparator_config_path"
@@ -531,7 +531,7 @@ def validate_projections(
                 _validate_result_shape(prior, identifier, relative)
                 prior_versions = list(prior["versions"])
             first = new_rows[0][1] if prior is None else None
-            accepted_at = first.get("accepted_at") if first is not None else prior["accepted_at"]
+            first_registered_on = first.get("first_registered_on") if first is not None else prior["first_registered_on"]
             identity = _identity(first) if first is not None else prior["identity"]
             authority_relative = identity_path(identity)
             authority = {
@@ -571,7 +571,7 @@ def validate_projections(
                 version = entry.get("version")
                 if type(version) is not int or version != len(appended) + 1:
                     raise ValueError(f"{relative}: changed entries are not the next ordered versions")
-                if entry.get("accepted_at") != accepted_at or _identity(entry) != identity:
+                if entry.get("first_registered_on") != first_registered_on or _identity(entry) != identity:
                     raise ValueError(f"{relative}: stable registration identity changed")
                 row = version_summary(entry_relative, entry)
                 appended.append(row)
@@ -608,7 +608,7 @@ def validate_projections(
             completed_result = {
                 "schema_version": SCHEMA_VERSION,
                 "id": identifier,
-                "accepted_at": accepted_at,
+                "first_registered_on": first_registered_on,
                 "identity": identity,
                 "versions": appended,
             }

@@ -23,7 +23,7 @@ from typing import Any
 
 import patch_surfaces
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 IDENTITY_SCHEMA_VERSION = 2
 REPOSITORY_LIMIT = 500
 REPOSITORY_PREFIX = "repositories"

@@ -58,7 +58,7 @@ def test_the_page_names_the_current_versions_newest_first(db, tmp_path):
     stage_public(db.path, site)
 
     page = _recent(site)
-    assert page["schema_version"] == 1
+    assert page["schema_version"] == 2
     assert [row["id"] for row in page["entries"]][:3] == [
         "PALOMAR-2026-07-29-000004",
         "PALOMAR-2026-07-29-000003",
@@ -82,7 +82,7 @@ def test_the_order_is_when_a_version_was_registered_and_not_when_it_was_reviewed
     held = db.entry_data(
         "PALOMAR-2026-08-09-000001",
         1,
-        accepted_at="2026-08-09",
+        first_registered_on="2026-08-09",
         registered_at="2026-08-09T09:00:00Z",
     )
     held["review"]["reviewed_at"] = "2026-08-01T09:00:00Z"
@@ -90,7 +90,7 @@ def test_the_order_is_when_a_version_was_registered_and_not_when_it_was_reviewed
     prompt = db.entry_data(
         "PALOMAR-2026-08-08-000001",
         1,
-        accepted_at="2026-08-08",
+        first_registered_on="2026-08-08",
         registered_at="2026-08-08T09:00:00Z",
     )
     prompt["review"]["reviewed_at"] = "2026-08-07T09:00:00Z"
@@ -181,7 +181,7 @@ def test_the_projection_has_one_exact_checked_fixture():
     entry = json.loads((root / "tests/fixtures/entry.json").read_text())
     expected = json.loads((root / "tests/fixtures/recent.json").read_text())
 
-    document = {"schema_version": 1, "entries": [row(entry, 3)]}
+    document = {"schema_version": 2, "entries": [row(entry, 3)]}
 
     assert validate_recent(document) == expected
 
@@ -193,7 +193,7 @@ def test_the_render_projection_has_one_exact_checked_fixture():
 
     page = [row(entry, 3)]
     document = {
-        "schema_version": 1,
+        "schema_version": 2,
         "renders": render_page(page, {(entry["id"], entry["version"]): render_hash(entry)}),
     }
 
@@ -211,7 +211,7 @@ def test_the_two_documents_name_the_same_results(db, tmp_path):
     page = _recent(site)
     renders = _renders(site)
 
-    assert renders["schema_version"] == 1
+    assert renders["schema_version"] == 2
     assert {(item["id"], item["version"]) for item in renders["renders"]} == {
         (item["id"], item["version"]) for item in page["entries"]
     }
@@ -307,26 +307,26 @@ def test_the_render_document_sits_at_a_stable_key(db, tmp_path):
 
 def test_every_canonical_schema_requires_the_fields_the_projection_reads():
     root = pathlib.Path(__file__).resolve().parents[1]
-    path = root / "schema-v2.json"
+    path = root / "schema-v3.json"
     validate_entry_schema_for_recent(json.loads(path.read_text()), path.name)
 
 
 def test_a_schema_cannot_quietly_make_a_projected_field_optional():
     root = pathlib.Path(__file__).resolve().parents[1]
-    schema = json.loads((root / "schema-v2.json").read_text())
+    schema = json.loads((root / "schema-v3.json").read_text())
     schema["properties"]["formalization"]["required"].remove("theorem_names")
 
     with pytest.raises(ValueError, match="formalization does not require.*theorem_names"):
-        validate_entry_schema_for_recent(schema, "schema-v2.json")
+        validate_entry_schema_for_recent(schema, "schema-v3.json")
 
 
 def test_the_entry_schema_must_require_preservation_for_recent_cards():
     root = pathlib.Path(__file__).resolve().parents[1]
-    schema = json.loads((root / "schema-v2.json").read_text())
+    schema = json.loads((root / "schema-v3.json").read_text())
     schema["required"].remove("preservation")
 
     with pytest.raises(ValueError, match="entry does not require.*preservation"):
-        validate_entry_schema_for_recent(schema, "schema-v2.json")
+        validate_entry_schema_for_recent(schema, "schema-v3.json")
 
 
 def test_the_projection_refuses_cap_plus_one_rows():

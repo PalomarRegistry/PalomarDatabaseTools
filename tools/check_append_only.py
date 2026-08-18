@@ -33,7 +33,7 @@ ENTRIES_PREFIX = "entries/"
 RENDERS_PREFIX = "renders/"
 EVIDENCE_PREFIX = "evidence/"
 # Frozen but never served. The scores that decided a version are kept so the
-# decision stays reconstructable; they are not part of the record, so that a
+# review outcome stays reconstructable; they are not part of the record, so that a
 # record's bytes are a function of the commit rather than of the publisher.
 SCORES_PREFIX = "scores/"
 # Submission ids are retry/idempotency keys. Once one is bound to a registered
@@ -68,7 +68,7 @@ FROZEN = (
     (
         SCORES_PREFIX,
         "recorded review scores are never deleted or renamed. "
-        "They are what makes the decision reconstructable.",
+        "They are what makes the review outcome reconstructable.",
         "recorded review scores are immutable, byte for byte. "
         "A re-review registers a new version, which records its own scores.",
         "the file mode of recorded review scores may not change",
@@ -80,7 +80,7 @@ FROZEN = (
         "the file mode of a registered submission binding may not change",
     ),
 )
-ENTRY_SCHEMA_NAME = "schema-v2.json"
+ENTRY_SCHEMA_NAME = "schema-v3.json"
 LAUNCH_MARKER = ".palomar-launched"
 
 # A published file must be an ordinary, non-executable file. A symlink freezes

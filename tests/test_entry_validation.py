@@ -47,7 +47,7 @@ def test_schema_discovery_rejects_an_alternate_entry_contract(db):
     assert validator is not None
     assert errors == [
         "schema-v99.json: unsupported entry schema document; "
-        "schema-v2.json is the sole current entry contract"
+        "schema-v3.json is the sole current entry contract"
     ]
 
 
@@ -65,24 +65,24 @@ def test_schema_discovery_fails_closed_when_the_sole_contract_is_missing(db):
 @pytest.mark.parametrize(
     ("contents", "expected"),
     [
-        ("{\n", "schema-v2.json: entry schema is not valid JSON"),
+        ("{\n", "schema-v3.json: entry schema is not valid JSON"),
         (
             '{"type": "object", "type": "string"}\n',
-            "schema-v2.json: entry schema is not valid JSON",
+            "schema-v3.json: entry schema is not valid JSON",
         ),
-        ('{"minimum": NaN}\n', "schema-v2.json: entry schema is not valid JSON"),
-        ('{"minimum": Infinity}\n', "schema-v2.json: entry schema is not valid JSON"),
-        ('{"minimum": -Infinity}\n', "schema-v2.json: entry schema is not valid JSON"),
-        ('{"minimum": 1e999}\n', "schema-v2.json: entry schema is not valid JSON"),
-        ("[]\n", "schema-v2.json: entry schema must be a JSON object"),
-        ("true\n", "schema-v2.json: entry schema must be a JSON object"),
+        ('{"minimum": NaN}\n', "schema-v3.json: entry schema is not valid JSON"),
+        ('{"minimum": Infinity}\n', "schema-v3.json: entry schema is not valid JSON"),
+        ('{"minimum": -Infinity}\n', "schema-v3.json: entry schema is not valid JSON"),
+        ('{"minimum": 1e999}\n', "schema-v3.json: entry schema is not valid JSON"),
+        ("[]\n", "schema-v3.json: entry schema must be a JSON object"),
+        ("true\n", "schema-v3.json: entry schema must be a JSON object"),
         (
             '{"type": 7}\n',
-            "schema-v2.json: entry schema is not valid Draft 2020-12 JSON Schema",
+            "schema-v3.json: entry schema is not valid Draft 2020-12 JSON Schema",
         ),
         (
             '{"type": "string", "pattern": "["}\n',
-            "schema-v2.json: entry schema is not valid Draft 2020-12 JSON Schema",
+            "schema-v3.json: entry schema is not valid Draft 2020-12 JSON Schema",
         ),
     ],
 )
@@ -110,7 +110,7 @@ def test_an_unreadable_entry_schema_is_a_deterministic_error(
 
     assert load_entry_schema(db.path) == (
         None,
-        ["schema-v2.json: entry schema cannot be read"],
+        ["schema-v3.json: entry schema cannot be read"],
     )
 
 
@@ -119,7 +119,7 @@ def test_non_utf8_entry_schema_is_a_closed_read_error(db):
 
     assert load_entry_schema(db.path) == (
         None,
-        ["schema-v2.json: entry schema is not valid UTF-8"],
+        ["schema-v3.json: entry schema is not valid UTF-8"],
     )
 
 
@@ -132,8 +132,8 @@ def test_alternate_schema_errors_stay_before_the_canonical_schema_error(db):
     assert validator is None
     assert errors == [
         "schema-v99.json: unsupported entry schema document; "
-        "schema-v2.json is the sole current entry contract",
-        "schema-v2.json: entry schema is not valid JSON",
+        "schema-v3.json is the sole current entry contract",
+        "schema-v3.json: entry schema is not valid JSON",
     ]
 
 
@@ -146,7 +146,7 @@ def test_a_live_symbolic_entry_schema_is_not_loaded(db):
 
     assert validator is None
     assert errors == [
-        "schema-v2.json: the sole entry schema is missing or symbolic"
+        "schema-v3.json: the sole entry schema is missing or symbolic"
     ]
 
 
@@ -275,7 +275,7 @@ def test_the_full_cli_reports_a_malformed_entry_schema_without_a_traceback(db):
 
     assert result.returncode == 1
     assert result.stderr.splitlines() == [
-        "schema-v2.json: entry schema is not valid JSON"
+        "schema-v3.json: entry schema is not valid JSON"
     ]
     assert "Traceback" not in result.stdout + result.stderr
 

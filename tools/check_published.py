@@ -297,9 +297,9 @@ def main() -> int:
     # nothing from the database, so it does not read it.
     if args.second_front_doors_only:
         # Asked with a path the registry does promise, so an origin serving the
-        # dataset answers and one that is not does not. `schema-v2.json` is
+        # dataset answers and one that is not does not. `schema-v3.json` is
         # published, stable and tiny.
-        elsewhere = second_front_doors(MUST_NOT_SERVE, "schema-v2.json")
+        elsewhere = second_front_doors(MUST_NOT_SERVE, "schema-v3.json")
         for line in elsewhere:
             print(f"::error::{line}", file=sys.stderr)
         print(f"checked {len(MUST_NOT_SERVE)} origin(s) that must serve nothing; "

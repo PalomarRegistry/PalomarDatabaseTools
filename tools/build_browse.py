@@ -4,7 +4,7 @@
 `index.json` names every active version, so adding one record rewrote all of
 it. A hundred fixed shards replaced that and did not fix it: a shard carries a
 hundredth of the registry, so a publication still generated and uploaded
-O(S/100) bytes for browsing, once per accepted result, and O(S²) over the
+O(S/100) bytes for browsing, once per registered result, and O(S²) over the
 registry's life. A divisor is not a bound.
 
 A page here carries the results that entered the registry on one day whose
@@ -12,9 +12,9 @@ serials fall in one band of two hundred, at `browse/<YYYY-MM-DD>/<page>.json`.
 Which page a row is on is read from the identifier alone, so no row ever moves
 and any one write touches one page.
 
-The day is the date the record carries as `accepted_at`, which is the day of
+The day is the date the record carries as `first_registered_on`, which is the day of
 its version 1's `registered_at` and so the day the result entered the registry.
-It is not the day its review reached a verdict.
+It is not the day its automated review completed.
 Registration waits on the submitter consenting to their review and they may
 take as long as they like over that, so dating a result by its review would let
 anyone who wanted an earlier position simply hold their consent. PalomarReviewer

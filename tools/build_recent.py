@@ -33,7 +33,7 @@ from typing import Any
 
 from selection import ARXIV_RE, MSC_RE, latest_entries, parsed, published_at, rows_newest_first
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 RECENT_PATH = "recent.json"
 RECENT_RENDERS_PATH = "recent-renders.json"
 # A hard bound, not a page size. Unbounded this is `index.json` again under
@@ -277,8 +277,8 @@ def validate_recent(document: object) -> dict[str, Any]:
             or versions < 1
         ):
             raise ValueError(f"{RECENT_PATH}: {where} has invalid version counts")
-        if item["status"] != "accepted":
-            raise ValueError(f"{RECENT_PATH}: {where}.status must be accepted")
+        if item["status"] != "registered":
+            raise ValueError(f"{RECENT_PATH}: {where}.status must be registered")
         _string(item["title"], f"{where}.title")
         _string(item["abstract"], f"{where}.abstract")
         if item["path"] != f"entries/{identifier}-v{version}.json":

@@ -9,7 +9,7 @@ from smoke_source_availability import _schema_formats
 
 def test_schema_formats_recurse_and_ignore_non_string_annotations():
     schema = {
-        "properties": {"accepted_at": {"format": "date"}},
+        "properties": {"first_registered_on": {"format": "date"}},
         "allOf": [
             {"items": {"format": "uri"}},
             {"properties": {"renderer": {"format": {"const": "verso-html"}}}},
@@ -45,7 +45,7 @@ def test_entry_schema_loader_errors_are_reported_without_a_second_parser(
         smoke_source_availability.load_entry_schema
         is entry_validation.load_entry_schema
     )
-    error = "schema-v2.json: entry schema is not valid JSON"
+    error = "schema-v3.json: entry schema is not valid JSON"
     monkeypatch.setattr(
         smoke_source_availability,
         "load_entry_schema",
@@ -60,15 +60,15 @@ def test_entry_schema_loader_errors_are_reported_without_a_second_parser(
 def test_runtime_smoke_rejects_an_unused_external_entry_reference(
     db, monkeypatch, capsys
 ):
-    schema = db.read_json("schema-v2.json")
+    schema = db.read_json("schema-v3.json")
     schema["properties"]["unused_future_field"] = {
         "$ref": "https://example.invalid/unused-entry-policy.json"
     }
-    db.write_json("schema-v2.json", schema)
+    db.write_json("schema-v3.json", schema)
     monkeypatch.setattr(smoke_source_availability, "ROOT", db.path)
 
     assert smoke_source_availability.main() == 1
     captured = capsys.readouterr()
     assert captured.err.splitlines() == [
-        "schema-v2.json: entry schema cannot be evaluated safely"
+        "schema-v3.json: entry schema cannot be evaluated safely"
     ]

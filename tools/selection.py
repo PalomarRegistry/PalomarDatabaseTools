@@ -31,13 +31,13 @@ def published_at(entry: dict[str, Any]) -> str:
     moment, so the surface that lists everything and the surfaces that order it
     now answer from one fact and cannot disagree.
 
-    Not `accepted_at`. That is a date rather than an instant, so it cannot
+    Not `first_registered_on`. That is a date rather than an instant, so it cannot
     order two results registered on one day, and every later version inherits
     it, so ordering by it would put a v2 registered years later among its
     siblings from the year of the v1.
 
     Not `review.reviewed_at` either, which is what this returned until now. A
-    review's verdict and the registration it leads to are different moments,
+    review outcome and the registration it permits are different moments,
     and since the identifier stopped taking the review's date they can be days
     apart: nothing is registered until the submitter has read their review and
     consented, and they may take as long as they like. At a couple of hundred
@@ -56,7 +56,7 @@ def parsed(value: str) -> dt.datetime:
     """One instant, refused rather than guessed at.
 
     A date was accepted here while `published_at` could fall back to
-    `accepted_at`. Keeping that tolerance would let a row carrying a date sort
+    `first_registered_on`. Keeping that tolerance would let a row carrying a date sort
     against rows carrying instants as though it had been registered at
     midnight, which is an order no reader could explain and nothing else would
     report.

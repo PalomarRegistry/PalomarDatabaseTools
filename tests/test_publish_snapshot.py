@@ -27,6 +27,7 @@ from publish_snapshot import (
 
 TREE = "a" * 64
 EVIDENCE = "b" * 64
+REPLACEMENT_EVIDENCE = "c" * 64
 
 
 def _identifier(serial: int) -> str:
@@ -223,6 +224,65 @@ def stage_stable_documents(site: pathlib.Path, paths: list[str]) -> None:
     (site / "release-delta.json").write_bytes(release_delta.canonical_bytes(delta))
 
 
+def prepare_record_replacement(
+    root: pathlib.Path, site: pathlib.Path, entry: str, old_entry: bytes
+) -> pathlib.Path:
+    """Rewrite one fixture record and bind both sides in the migration shape."""
+    entry_path = site / "entries" / f"{entry}.json"
+    entry_path.write_text(json.dumps({"id": entry, "review": "no-problems"}) + "\n")
+    old_evidence = site / "evidence" / entry / EVIDENCE
+    new_evidence = site / "evidence" / entry / REPLACEMENT_EVIDENCE
+    old_evidence.rename(new_evidence)
+    review_path = new_evidence / "review.json"
+    old_review = review_path.read_bytes()
+    review_path.write_text(json.dumps({"for": entry, "outcome": "neutral"}) + "\n")
+
+    delta = release_delta.parse((site / "release-delta.json").read_bytes())
+    immutable = []
+    for path in sorted(
+        candidate
+        for prefix in ("entries", "renders", "evidence")
+        for candidate in (site / prefix).rglob("*")
+        if candidate.is_file()
+    ):
+        data = path.read_bytes()
+        immutable.append(
+            {
+                "path": path.relative_to(site).as_posix(),
+                "bytes": len(data),
+                "sha256": hashlib.sha256(data).hexdigest(),
+            }
+        )
+    delta["additions"] = immutable
+    delta["records"]["root"] = release_delta.root_of(immutable)
+    (site / "release-delta.json").write_bytes(release_delta.canonical_bytes(delta))
+
+    manifest = root / "record-replacements.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "migration": "review-language-v3",
+                "database_changes": [
+                    {
+                        "entry": f"entries/{entry}.json",
+                        "old_entry_sha256": hashlib.sha256(old_entry).hexdigest(),
+                        "new_entry_sha256": hashlib.sha256(entry_path.read_bytes()).hexdigest(),
+                        "old_review_sha256": hashlib.sha256(old_review).hexdigest(),
+                        "new_review_sha256": hashlib.sha256(review_path.read_bytes()).hexdigest(),
+                        "old_evidence_tree_sha256": EVIDENCE,
+                        "new_evidence_tree_sha256": REPLACEMENT_EVIDENCE,
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    return manifest
+
+
 def test_the_pointer_is_written_last_and_names_the_new_layout(tmp_path):
     client = MemoryR2()
     release = publish_snapshot(client, "bucket", build_site(tmp_path, "one", [_identifier(1)]))
@@ -404,6 +464,95 @@ def test_a_record_whose_bytes_changed_stops_the_publication(tmp_path):
     # the bytes at the key are not the bytes this release describes.
     with pytest.raises(RuntimeError, match="readback verification failed"):
         publish_snapshot(client, "bucket", altered)
+
+
+def test_manifest_bound_replacement_rebinds_only_the_named_record(tmp_path):
+    client = MemoryR2()
+    first = _identifier(1)
+    original = build_site(tmp_path, "one", [first])
+    old_entry = (original / "entries" / f"{first}.json").read_bytes()
+    publish_snapshot(client, "bucket", original)
+    replacement = build_site(tmp_path, "two", [first])
+    manifest = prepare_record_replacement(tmp_path, replacement, first, old_entry)
+    client.put_order.clear()
+
+    publish_snapshot(
+        client, "bucket", replacement, record_replacements=manifest
+    )
+
+    entry_key = f"public/entries/{first}.json"
+    new_evidence_key = (
+        f"public/evidence/{first}/{REPLACEMENT_EVIDENCE}/review.json"
+    )
+    assert client.objects[entry_key]["Body"] == (
+        replacement / "entries" / f"{first}.json"
+    ).read_bytes()
+    assert new_evidence_key in client.objects
+    assert client.put_order.index(new_evidence_key) < client.put_order.index(entry_key)
+    assert client.put_order.index(entry_key) < client.put_order.index(POINTER_KEY)
+    assert not any(
+        key.startswith(f"public/evidence/{first}/{EVIDENCE}/")
+        for key in client.objects
+    )
+
+
+def test_record_replacement_refuses_origin_bytes_outside_the_manifest(tmp_path):
+    client = MemoryR2()
+    first = _identifier(1)
+    original = build_site(tmp_path, "one", [first])
+    old_entry = (original / "entries" / f"{first}.json").read_bytes()
+    publish_snapshot(client, "bucket", original)
+    replacement = build_site(tmp_path, "two", [first])
+    manifest = prepare_record_replacement(tmp_path, replacement, first, old_entry)
+    entry_key = f"public/entries/{first}.json"
+    client.objects[entry_key]["Body"] = b"unmanifested drift\n"
+    pointer = bytes(client.objects[POINTER_KEY]["Body"])
+
+    with pytest.raises(RuntimeError, match="origin does not match"):
+        publish_snapshot(
+            client, "bucket", replacement, record_replacements=manifest
+        )
+
+    assert bytes(client.objects[POINTER_KEY]["Body"]) == pointer
+
+
+def test_record_replacement_refuses_an_unbound_old_evidence_tree(tmp_path):
+    client = MemoryR2()
+    first = _identifier(1)
+    original = build_site(tmp_path, "one", [first])
+    old_entry = (original / "entries" / f"{first}.json").read_bytes()
+    publish_snapshot(client, "bucket", original)
+    replacement = build_site(tmp_path, "two", [first])
+    manifest = prepare_record_replacement(tmp_path, replacement, first, old_entry)
+    old_review_key = f"public/evidence/{first}/{EVIDENCE}/review.json"
+    client.objects[old_review_key]["Body"] = b"unmanifested evidence drift\n"
+    pointer = bytes(client.objects[POINTER_KEY]["Body"])
+
+    with pytest.raises(RuntimeError, match="origin review does not match"):
+        publish_snapshot(
+            client, "bucket", replacement, record_replacements=manifest
+        )
+
+    assert bytes(client.objects[POINTER_KEY]["Body"]) == pointer
+
+
+def test_record_replacement_is_retry_safe_after_the_pointer_moves(tmp_path):
+    client = MemoryR2()
+    first = _identifier(1)
+    original = build_site(tmp_path, "one", [first])
+    old_entry = (original / "entries" / f"{first}.json").read_bytes()
+    publish_snapshot(client, "bucket", original)
+    replacement = build_site(tmp_path, "two", [first])
+    manifest = prepare_record_replacement(tmp_path, replacement, first, old_entry)
+
+    release = publish_snapshot(
+        client, "bucket", replacement, record_replacements=manifest
+    )
+    again = publish_snapshot(
+        client, "bucket", replacement, record_replacements=manifest
+    )
+
+    assert again == release
 
 
 def test_an_orphan_from_an_interrupted_publication_is_cleared(tmp_path):

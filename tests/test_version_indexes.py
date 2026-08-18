@@ -37,7 +37,7 @@ def test_every_identifier_gets_a_document_naming_its_versions(db, tmp_path):
     stage_public(db.path, site)
 
     first = _versions(site, FIRST)
-    assert first["schema_version"] == 1
+    assert first["schema_version"] == 2
     assert first["id"] == FIRST
     assert [row["version"] for row in first["entries"]] == [1, 2]
     assert all(row["id"] == FIRST for row in first["entries"]), "another result leaked in"
@@ -128,6 +128,7 @@ def test_an_incremental_new_version_keeps_a_prior_withdrawal_out(
         ("symlink", "symbolic versions"),
         ("missing", "missing versions"),
         ("json", "invalid versions"),
+        ("schema", "invalid versions"),
         ("disagreement", "projection-disagreeing versions"),
     ],
 )
@@ -148,6 +149,10 @@ def test_an_unusable_prior_version_projection_requests_a_full_rebuild(
         version_path.unlink()
     elif malformation == "json":
         version_path.write_text("{\n", encoding="utf-8")
+    elif malformation == "schema":
+        document = json.loads(version_path.read_text(encoding="utf-8"))
+        document["schema_version"] = 1
+        version_path.write_text(json.dumps(document) + "\n", encoding="utf-8")
     else:
         document = json.loads(version_path.read_text(encoding="utf-8"))
         document["entries"][0]["title"] = "drifted title"

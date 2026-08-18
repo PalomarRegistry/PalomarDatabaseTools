@@ -327,7 +327,7 @@ def _write_version_indexes(
                 f"{registration_projection.MAX_VERSIONS_PER_RESULT} one document may carry"
             )
         document = {
-            "schema_version": 1,
+            "schema_version": 2,
             "id": identifier,
             "entries": sorted(summaries, key=lambda row: int(row["version"])),
         }
@@ -588,7 +588,7 @@ class Plan:
                     not isinstance(document, dict)
                     or set(document) != {"schema_version", "id", "entries"}
                     or type(document.get("schema_version")) is not int
-                    or document.get("schema_version") != 1
+                    or document.get("schema_version") != 2
                     or document.get("id") != item.id
                     or not isinstance(document.get("entries"), list)
                 ):

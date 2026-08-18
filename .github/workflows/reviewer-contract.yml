@@ -7,7 +7,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "schema-v2.json"
+      - "schema-v3.json"
       - "tools/**"
       - "tests/fixtures/**"
       - "requirements-test.txt"
@@ -34,17 +34,35 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
           path: database-tools
+      - name: Resolve coordinated contract branches
+        id: contract-refs
+        env:
+          COORDINATED_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          resolve_ref() {
+            repository="$1"
+            if [ -n "$COORDINATED_REF" ] && git ls-remote --exit-code --heads \
+              "https://github.com/$repository.git" \
+              "refs/heads/$COORDINATED_REF" >/dev/null 2>&1; then
+              printf '%s\n' "$COORDINATED_REF"
+            else
+              printf '%s\n' main
+            fi
+          }
+          echo "reviewer=$(resolve_ref PalomarRegistry/PalomarReviewer)" >> "$GITHUB_OUTPUT"
+          echo "policy=$(resolve_ref PalomarRegistry/PalomarPolicy)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: PalomarRegistry/PalomarReviewer
-          ref: main
+          ref: ${{ steps.contract-refs.outputs.reviewer }}
           fetch-depth: 1
           persist-credentials: false
           path: reviewer
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: PalomarRegistry/PalomarPolicy
-          ref: main
+          ref: ${{ steps.contract-refs.outputs.policy }}
           fetch-depth: 1
           persist-credentials: false
           path: policy

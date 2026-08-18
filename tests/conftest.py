@@ -68,7 +68,7 @@ class Database:
     def __init__(self, path: pathlib.Path) -> None:
         self.path = path
         (path / "entries").mkdir(parents=True, exist_ok=True)
-        shutil.copy(ROOT / "schema-v2.json", path / "schema-v2.json")
+        shutil.copy(ROOT / "schema-v3.json", path / "schema-v3.json")
         shutil.copy(
             ROOT / "tests" / "fixtures" / "synthetic-scores-schema.json",
             path / "scores-v1.json",
@@ -112,7 +112,7 @@ class Database:
 
     def entry_data(self, identifier: str, version: int, **overrides: object) -> dict:
         data = json.loads(SAMPLE_ENTRY.read_text(encoding="utf-8"))
-        data["schema_version"] = 2
+        data["schema_version"] = 3
         data["id"] = identifier
         data["version"] = version
         data["title"] = f"{identifier} version {version}"
@@ -120,18 +120,18 @@ class Database:
             data["formalization"]["comparator_config_path"] = (
                 f"Comparator/{identifier}/comparator.json"
             )
-        data["accepted_at"] = identifier[len("PALOMAR-") : len("PALOMAR-YYYY-MM-DD")]
+        data["first_registered_on"] = identifier[len("PALOMAR-") : len("PALOMAR-YYYY-MM-DD")]
         render = data["challenge_render"]
         render["artifact_path"] = (
             f"renders/{identifier}-v{version}/{render['artifact_tree_sha256']}/"
         )
         data.update(overrides)
-        # The day of `registered_at` is `accepted_at`, which is the day the
+        # The day of `registered_at` is `first_registered_on`, which is the day the
         # identifier carries, so a test that moves one of them moves all three
         # without having to know that. A test that wants them to disagree says
         # `registered_at=` and gets exactly the disagreement it asked for.
         if "registered_at" not in overrides:
-            data["registered_at"] = f"{data['accepted_at']}T00:00:00Z"
+            data["registered_at"] = f"{data['first_registered_on']}T00:00:00Z"
         data["submission"]["submission_id"] = _submission_id(identifier, version)
         data["verification"]["evidence_path"] = (
             f"evidence/{identifier}-v{version}/"
@@ -244,7 +244,7 @@ class Database:
             }],
         }
         review = {
-            "schema_version": 1,
+            "schema_version": 3,
             "submission_id": data["submission"]["submission_id"],
             "source": {
                 "repository": data["source"]["repository"],
@@ -254,7 +254,7 @@ class Database:
             "policy_commit": data["review"]["policy_commit"],
             "reviewed_at": data["review"]["reviewed_at"],
             "reviewer_models": data["review"]["reviewer_models"],
-            "decision": data["review"]["verdict"],
+            "outcome": data["review"]["outcome"],
             "summary": data["abstract"],
             # No `warnings`, and no `scores`. The record beside this carries the
             # review's remarks; the archived review carries each of them once,
@@ -264,7 +264,7 @@ class Database:
             # fixture that kept the field was describing a document the reviewer
             # does not write.
             "requested_changes": [],
-            "passes": [],
+            "checks": [],
         }
         encoded = {
             "mechanical-report.json": json.dumps(report, indent=2, sort_keys=True).encode() + b"\n",

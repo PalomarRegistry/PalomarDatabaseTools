@@ -157,7 +157,7 @@ def test_unsupported_result_projection_schema_version_is_rejected(db):
     assert any("does not exactly match canonical entries" in error for error in errors)
 
 
-@pytest.mark.parametrize("version", [1, 2.0, 7, "2", True, None])
+@pytest.mark.parametrize("version", [1, 2, 3.0, 7, "3", True, None])
 def test_entry_missing_or_wrong_schema_version_is_rejected_clearly(db, version):
     data = db.entry_data("PALOMAR-2026-07-29-000002", 1)
     if version is None:
@@ -167,52 +167,52 @@ def test_entry_missing_or_wrong_schema_version_is_rejected_clearly(db, version):
     db.install_entry(data)
     errors = validate(db.path)
     assert any(
-        "schema_version must equal 2" in error
-        and "schema-v2.json is the sole current entry contract" in error
+        "schema_version must equal 3" in error
+        and "schema-v3.json is the sole current entry contract" in error
         for error in errors
     )
 
 
 def test_an_alternate_entry_schema_document_is_rejected(db):
-    shutil.copy(db.path / "schema-v2.json", db.path / "schema-v3.json")
+    shutil.copy(db.path / "schema-v3.json", db.path / "schema-v4.json")
     errors = validate(db.path)
     assert any(
-        "schema-v3.json: unsupported entry schema document" in error
+        "schema-v4.json: unsupported entry schema document" in error
         for error in errors
     )
 
 
 def test_an_alternate_entry_schema_symlink_is_rejected(db):
-    (db.path / "schema-v3.json").symlink_to("schema-v2.json")
+    (db.path / "schema-v4.json").symlink_to("schema-v3.json")
     errors = validate(db.path)
     assert any(
-        "schema-v3.json: unsupported entry schema document" in error
+        "schema-v4.json: unsupported entry schema document" in error
         for error in errors
     )
 
 
 def test_the_sole_entry_schema_must_exist(db):
-    db.remove("schema-v2.json")
+    db.remove("schema-v3.json")
     errors = validate(db.path)
     assert any(
-        "schema-v2.json: the sole entry schema is missing or symbolic" in error
+        "schema-v3.json: the sole entry schema is missing or symbolic" in error
         for error in errors
     )
 
 
 def test_the_sole_entry_schema_must_not_be_a_symlink(db):
-    db.remove("schema-v2.json")
-    (db.path / "schema-v2.json").symlink_to("README.md")
+    db.remove("schema-v3.json")
+    (db.path / "schema-v3.json").symlink_to("README.md")
     assert any(
-        "schema-v2.json: the sole entry schema is missing or symbolic" in error
+        "schema-v3.json: the sole entry schema is missing or symbolic" in error
         for error in validate(db.path)
     )
 
 
 def test_the_sole_entry_schema_must_not_be_executable(db):
-    (db.path / "schema-v2.json").chmod(0o755)
+    (db.path / "schema-v3.json").chmod(0o755)
     assert any(
-        "schema-v2.json: the sole entry schema must be a non-executable ordinary file"
+        "schema-v3.json: the sole entry schema must be a non-executable ordinary file"
         in error
         for error in validate(db.path)
     )
@@ -370,7 +370,7 @@ def test_a_record_citing_another_review_is_rejected(db):
     entry = db.read_json(path.relative_to(db.path).as_posix())
     review_path = db.path / entry["verification"]["evidence_path"] / "review.json"
     review = json.loads(review_path.read_text())
-    review["decision"] = "reject"
+    review["outcome"] = "rejected"
     review_path.write_text(json.dumps(review, indent=2, sort_keys=True) + "\n")
     errors = validate(db.path)
     assert any("review.report.sha256 does not match" in error for error in errors)
@@ -383,24 +383,24 @@ def test_unreferenced_verification_evidence_is_rejected(db):
 
 def test_dated_identifier_and_acceptance_date_must_agree(db):
     identifier = "PALOMAR-2026-07-29-000002"
-    db.add_entry(identifier, 1, accepted_at="2026-07-29")
+    db.add_entry(identifier, 1, first_registered_on="2026-07-29")
     assert validate(db.path) == []
 
-    entry = db.entry_data(identifier, 1, accepted_at="2026-07-30")
+    entry = db.entry_data(identifier, 1, first_registered_on="2026-07-30")
     db.install_entry(entry)
     errors = validate(db.path)
-    assert any("date must match accepted_at" in error for error in errors)
+    assert any("date must match first_registered_on" in error for error in errors)
 
 
 def test_the_acceptance_date_must_be_the_day_version_one_was_registered(db):
     """Two fields that must agree, written in different places, drift.
 
-    `accepted_at` is the result's date: the identifier carries it, browsing
+    `first_registered_on` is the result's date: the identifier carries it, browsing
     pages by it, and every later version inherits it. `registered_at` is the
     version's own instant and is what the landing page, the feeds and the
     subject pages order by. They meet at version 1. A record where they have
     come apart is well formed, satisfies its schema and passes the check that
-    the identifier matches `accepted_at`; what it produces is a result browsed
+    the identifier matches `first_registered_on`; what it produces is a result browsed
     under one day and ordered under another, each correct on its own terms.
     """
     identifier = "PALOMAR-2026-07-29-000002"
@@ -415,7 +415,7 @@ def test_the_acceptance_date_must_be_the_day_version_one_was_registered(db):
     db.install_entry(db.entry_data(identifier, 1, registered_at="2026-07-30T11:00:00Z"))
     errors = validate(db.path)
     assert any(
-        f"accepted_at: 2026-07-29 is not the day {identifier}-v1 was registered "
+        f"first_registered_on: 2026-07-29 is not the day {identifier}-v1 was registered "
         "(2026-07-30T11:00:00Z)" in error
         for error in errors
     )

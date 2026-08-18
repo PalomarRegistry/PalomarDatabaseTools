@@ -228,7 +228,7 @@ def test_a_page_is_sealed_at_its_size_and_the_head_says_how_many_there_are(
 
     head = _document(site, head_path("palomar"))
     assert head == {
-        "schema_version": 1,
+        "schema_version": 2,
         "term": "palomar",
         "page_size": 4,
         "pages": 3,
@@ -328,7 +328,7 @@ def test_a_word_carried_by_one_result_is_a_page_of_one(db, tmp_path):
     stage_public.stage_public(db.path, site)
 
     assert _document(site, head_path("hypergraph")) == {
-        "schema_version": 1,
+        "schema_version": 2,
         "term": "hypergraph",
         "page_size": PAGE_SIZE,
         "pages": 1,

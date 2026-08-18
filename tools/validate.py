@@ -57,13 +57,13 @@ def _registration_date_errors(
     errors: list[str] = []
     for name, entry in entries:
         identifier = entry.get("id")
-        accepted_at = entry.get("accepted_at")
+        first_registered_on = entry.get("first_registered_on")
         registered_at = entry.get("registered_at")
-        if not isinstance(identifier, str) or not isinstance(accepted_at, str):
+        if not isinstance(identifier, str) or not isinstance(first_registered_on, str):
             continue
-        if isinstance(registered_at, str) and registered_at[:10] < accepted_at:
+        if isinstance(registered_at, str) and registered_at[:10] < first_registered_on:
             errors.append(
-                f"{name}:registered_at: {registered_at} is before {accepted_at}, "
+                f"{name}:registered_at: {registered_at} is before {first_registered_on}, "
                 "the day the result entered the registry"
             )
         first_registered_at = first.get(identifier)
@@ -72,27 +72,27 @@ def _registration_date_errors(
         # a later version would hide it behind a second complaint.
         if first_registered_at is None:
             continue
-        if accepted_at != first_registered_at[:10]:
+        if first_registered_on != first_registered_at[:10]:
             errors.append(
-                f"{name}:accepted_at: {accepted_at} is not the day {identifier}-v1 "
+                f"{name}:first_registered_on: {first_registered_on} is not the day {identifier}-v1 "
                 f"was registered ({first_registered_at})"
             )
     return errors
 
 
 def _validate_registration_dates(entries: list[tuple[str, Mapping[str, Any]]]) -> list[str]:
-    """`accepted_at` must be the day version 1 was registered.
+    """`first_registered_on` must be the day version 1 was registered.
 
-    The two are one fact written twice. `accepted_at` is the result's date: it
+    The two are one fact written twice. `first_registered_on` is the result's date: it
     is in the identifier, it decides the browse page, and every later version
     inherits it. `registered_at` is the version's own instant and is what every
     ordering surface reads. They meet at version 1, where the day of the one is
     the other.
 
-    Nothing else would notice them coming apart. A record whose `accepted_at`
+    Nothing else would notice them coming apart. A record whose `first_registered_on`
     disagrees with its v1's `registered_at` is well formed, satisfies its
     schema, and passes the check that the identifier's date matches
-    `accepted_at`; what it produces is browsing that pages a result under one
+    `first_registered_on`; what it produces is browsing that pages a result under one
     day while the landing page, the feeds and the subject pages order it under
     another, each of them correct on its own terms. Two fields that must agree
     and are written in different places, in two repositories, drift.
@@ -223,13 +223,13 @@ def validate(
                         where = ".".join(str(part) for part in error.path) or "<root>"
                         errors.append(f"{name}:{where}: {error.message}")
             identifier = data.get("id")
-            accepted_at = data.get("accepted_at")
+            first_registered_on = data.get("first_registered_on")
             if (
                 isinstance(identifier, str)
-                and isinstance(accepted_at, str)
-                and not identifier.startswith(f"PALOMAR-{accepted_at}-")
+                and isinstance(first_registered_on, str)
+                and not identifier.startswith(f"PALOMAR-{first_registered_on}-")
             ):
-                errors.append(f"{name}:id: date must match accepted_at")
+                errors.append(f"{name}:id: date must match first_registered_on")
             render_touched = scope is None or name in scope.entries
             evidence_touched = scope is None or name in scope.entries
             if scope is not None:

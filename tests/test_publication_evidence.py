@@ -456,7 +456,7 @@ def test_pull_request_validation_scopes_current_and_trusted_base_policy():
     assert "git worktree" not in trusted_base_script
     assert 'git diff --quiet "$BASE_SHA"' in real_tree
     assert "tools/ requirements-tools.txt" in real_tree
-    assert "schema-v2.json scores-v1.json takedowns.json" in real_tree
+    assert "schema-v3.json scores-v1.json takedowns.json" in real_tree
     assert "tests/path-classes.json" in real_tree
     assert "'.github/workflows/publish*.yml'" in real_tree
     assert 'stage_public.py --output "$RUNNER_TEMP/public-data" --full' in real_tree
@@ -514,7 +514,7 @@ def test_schema_policy_changes_trigger_every_production_consumer():
     assert '- "tools/entry_validation.py"' in publish
     assert '- "tools/schema_policy.py"' in publish
     for path in (
-        "schema-v2.json",
+        "schema-v3.json",
         "scores-v1.json",
         "tools/entry_validation.py",
         "tools/schema_policy.py",
@@ -571,7 +571,7 @@ def test_publication_validates_from_the_release_it_will_patch():
     for pattern in (
         "/tools/",
         "/requirements-tools.txt",
-        "/schema-v2.json",
+        "/schema-v3.json",
         "/scores-v1.json",
         "/LICENSE",
         "/.palomar-launched",
@@ -691,7 +691,7 @@ def _sparsify_fixture(repo):
         "sparse-checkout",
         "set",
         "--no-cone",
-        "/schema-v2.json",
+        "/schema-v3.json",
         "/scores-v1.json",
         "/LICENSE",
         "/.palomar-launched",
@@ -729,7 +729,7 @@ def _blobless_checkout(repo, tmp_path):
             "sparse-checkout",
             "set",
             "--no-cone",
-            "/schema-v2.json",
+            "/schema-v3.json",
             "/scores-v1.json",
             "/LICENSE",
             "/.palomar-launched",

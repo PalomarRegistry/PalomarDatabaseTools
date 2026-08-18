@@ -37,7 +37,7 @@
         "project_path": null,
         "repository": "kim-em/erdos-unit-distance-comparator"
       },
-      "status": "accepted",
+      "status": "registered",
       "title": "Uniform-constant Erdős unit-distance conjecture is false",
       "trust": {
         "level": "high"
@@ -46,5 +46,5 @@
       "versions": 3
     }
   ],
-  "schema_version": 1
+  "schema_version": 2
 }

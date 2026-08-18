@@ -70,7 +70,7 @@ from typing import Any, Iterable
 
 from patch_surfaces import Rebuild
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 TERM_ROOT = "search/t"
 # The words the indexer drops, published so that a reader can drop them from a
 # query instead of inferring them from a missing head.

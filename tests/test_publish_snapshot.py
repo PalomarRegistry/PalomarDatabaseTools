@@ -503,7 +503,7 @@ def test_the_path_classes_agree_with_the_table_the_worker_is_read_against():
 def _database(root: pathlib.Path, launched: bool) -> pathlib.Path:
     database = root / "canonical"
     database.mkdir(parents=True, exist_ok=True)
-    (database / "schema-v2.json").write_text("{}\n")
+    (database / "schema-v3.json").write_text("{}\n")
     (database / "scores-v1.json").write_text("{}\n")
     if launched:
         (database / ".palomar-launched").write_text("")

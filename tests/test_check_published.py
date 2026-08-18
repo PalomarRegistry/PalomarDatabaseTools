@@ -44,9 +44,9 @@ class PublishedPathsTests(unittest.TestCase):
             result = root / "registrations" / "results" / f"{identifier}.json"
             result.parent.mkdir(parents=True, exist_ok=True)
             existing = json.loads(result.read_text()) if result.is_file() else {
-                "schema_version": 1,
+                "schema_version": 2,
                 "id": identifier,
-                "accepted_at": identifier[8:18],
+                "first_registered_on": identifier[8:18],
                 "identity": {
                     "source_repository": "example/repository",
                     "project_path": None,
@@ -59,7 +59,7 @@ class PublishedPathsTests(unittest.TestCase):
                 "submission_id": f"fixture{record['version']:05d}",
                 "registered_at": f"{identifier[8:18]}T00:00:00Z",
                 "title": "fixture",
-                "status": "accepted",
+                "status": "registered",
                 "path": f"entries/{name}",
                 "abstract": "fixture",
                 "classification": {"arxiv": [], "msc2020": []},
@@ -298,7 +298,7 @@ def test_only_narrows_the_records_but_never_the_withdrawals(tmp_path, monkeypatc
     index = {
         "schema_version": 3,
         "entries": [
-            {"id": f"PALOMAR-2026-07-29-{n:06d}", "version": 1, "title": "t", "status": "accepted",
+            {"id": f"PALOMAR-2026-07-29-{n:06d}", "version": 1, "title": "t", "status": "registered",
              "path": f"entries/PALOMAR-2026-07-29-{n:06d}-v1.json"}
             for n in (1, 2)
         ],
@@ -361,12 +361,12 @@ class SecondFrontDoors(unittest.TestCase):
     def test_an_origin_that_answers_is_a_finding(self):
         problems = second_front_doors(
             ["https://palomar-data-staging.palomar-server.workers.dev/"],
-            "schema-v2.json",
+            "schema-v3.json",
             opener=lambda *_, **__: self.Response(200),
         )
         self.assertEqual(len(problems), 1, problems)
         self.assertIn("second front door", problems[0])
-        self.assertIn("schema-v2.json", problems[0])
+        self.assertIn("schema-v3.json", problems[0])
 
     def test_an_origin_that_does_not_answer_is_what_is_wanted(self):
         """A refusal, a name that does not resolve, and a 404 all mean the same
@@ -375,12 +375,12 @@ class SecondFrontDoors(unittest.TestCase):
             lambda *_, **__: (_ for _ in ()).throw(OSError("name does not resolve")),
             lambda *_, **__: (_ for _ in ()).throw(TimeoutError("timed out")),
             lambda *_, **__: (_ for _ in ()).throw(
-                urllib.error.HTTPError("https://x.test/schema-v2.json", 404, "", {}, None)),
+                urllib.error.HTTPError("https://x.test/schema-v3.json", 404, "", {}, None)),
             lambda *_, **__: (_ for _ in ()).throw(
-                urllib.error.HTTPError("https://x.test/schema-v2.json", 522, "", {}, None)),
+                urllib.error.HTTPError("https://x.test/schema-v3.json", 522, "", {}, None)),
         ):
             self.assertEqual(
-                second_front_doors(["https://x.test/"], "schema-v2.json", opener=opener), [],
+                second_front_doors(["https://x.test/"], "schema-v3.json", opener=opener), [],
             )
 
     def test_a_transient_failure_is_not_reported_as_one(self):
@@ -389,15 +389,15 @@ class SecondFrontDoors(unittest.TestCase):
         step has to keep meaning something."""
         self.assertEqual(
             second_front_doors(
-                ["https://x.test/"], "schema-v2.json",
+                ["https://x.test/"], "schema-v3.json",
                 opener=lambda *_, **__: (_ for _ in ()).throw(TimeoutError("timed out")),
             ),
             [],
         )
 
     def test_checking_none_is_expressible(self):
-        self.assertEqual(second_front_doors([""], "schema-v2.json"), [])
-        self.assertEqual(second_front_doors([], "schema-v2.json"), [])
+        self.assertEqual(second_front_doors([""], "schema-v3.json"), [])
+        self.assertEqual(second_front_doors([], "schema-v3.json"), [])
 
 
 def test_second_front_doors_cli_mode_is_executable(monkeypatch, capsys):

@@ -557,7 +557,7 @@ def _launched(database: pathlib.Path) -> bool:
     The database is identified rather than assumed, so pointing this at the
     wrong directory fails loudly instead of quietly disarming the guard.
     """
-    if not all((database / name).is_file() for name in ("schema-v2.json", "scores-v1.json")):
+    if not all((database / name).is_file() for name in ("schema-v3.json", "scores-v1.json")):
         raise RuntimeError(
             f"{database} does not look like the canonical database: no "
             "entry and score schema pair. "

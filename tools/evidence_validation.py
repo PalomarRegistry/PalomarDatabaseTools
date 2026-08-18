@@ -151,7 +151,7 @@ def validate_evidence(
         if manifest != expected_manifest:
             errors.append(f"{name}:verification evidence manifest does not match its files")
 
-    # The archived review is what the record's decision rests on, so the entry
+    # The archived review is what the record's review outcome rests on, so the entry
     # must cite the exact bytes that are served.
     #
     # Those are not quite the bytes the submitter read. The archived copy is

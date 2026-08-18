@@ -36,7 +36,7 @@ WEB_BASE = "https://palomar-registry.org/"
 FEED_BASE = "https://data.palomar-registry.org/"
 XML_INVALID_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 # A feed is a notification channel, not the registry. Without a bound, the main
-# feed carries every result ever accepted -- 40 MB at a hundred thousand of them,
+# feed carries every result ever registered -- 40 MB at a hundred thousand of them,
 # fetched by every reader on every poll -- and a popular MSC code carries a
 # sizeable fraction of that. Readers want what is new; the registry is what is
 # for browsing. These are the numbers most aggregators are comfortable with, and
@@ -124,8 +124,8 @@ def write_main_feed(site: pathlib.Path) -> pathlib.Path:
     target.write_bytes(
         _feed(
             _rows(site, "recent.json")[:MAIN_FEED_ITEMS],
-            title="Palomar accepted results",
-            description="New and updated Lean-verified results accepted by Palomar.",
+            title="Palomar registered results",
+            description="New and updated Lean-verified results registered with Palomar.",
             feed_url=f"{FEED_BASE}feed.xml",
         )
     )

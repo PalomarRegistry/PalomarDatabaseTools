@@ -15,7 +15,7 @@ a serial that counts from 1 within that day, so the day, and
 identifier. Nothing has to be consulted to find the page a row is on, no row
 ever moves from one page to another, and a page is written only when something
 in it changes. That day is when the submitter's consent was acted on and not
-when their review reached a verdict, which is PalomarReviewer's decision and
+when their automated review completed, which is PalomarReviewer's outcome and
 argued there. A write can still land on a day already past, because a new
 version keeps its first version's identifier and a withdrawal takes a row off
 that same page; it rewrites the one page it lands on, which is what every other
@@ -61,7 +61,7 @@ import pathlib
 import re
 from typing import Any, Iterable
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 # Two hundred results a page. A result carries a handful of versions, so a page
 # is a few tens of kilobytes of index rows, and a day that registers more than
 # two hundred results simply opens another page.

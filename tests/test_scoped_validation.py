@@ -443,7 +443,7 @@ def test_projection_cost_terms_are_result_local_and_the_day_state_is_a_counter(r
     scope = scope_of(repo.path, base)
     assert scope is not None and len(scope.registration_paths) == 4
     assert repo.read_json("registrations/days/2026-07-29.json") == {
-        "schema_version": 1,
+        "schema_version": 2,
         "date": "2026-07-29",
         "last_serial": 2,
     }
@@ -483,7 +483,7 @@ def test_a_scoped_run_keeps_a_broken_at_rest_score_schema_red(repo):
 
 
 def test_a_scoped_run_keeps_a_broken_at_rest_entry_schema_red(repo):
-    repo.write("schema-v2.json", "{\n")
+    repo.write("schema-v3.json", "{\n")
     base = repo.commit("a broken entry schema reaches the base")
     repo.add_entry(SECOND, 1)
     repo.commit("one otherwise valid addition")
@@ -492,13 +492,13 @@ def test_a_scoped_run_keeps_a_broken_at_rest_entry_schema_red(repo):
 
     assert scope is not None
     assert validate(repo.path, scope) == [
-        "schema-v2.json: entry schema is not valid JSON"
+        "schema-v3.json: entry schema is not valid JSON"
     ]
 
 
 def test_a_scoped_run_keeps_an_unevaluable_at_rest_entry_schema_red(repo):
     repo.write_json(
-        "schema-v2.json",
+        "schema-v3.json",
         {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
             "$ref": "#",
@@ -723,7 +723,7 @@ def test_trusted_base_validator_reports_a_hostile_broken_entry_schema(
     )
 
     base = repo.git("rev-parse", "HEAD").strip()
-    repo.write("schema-v2.json", '{"type": 7}\n')
+    repo.write("schema-v3.json", '{"type": 7}\n')
     repo.commit("break the entry schema")
     environment = dict(os.environ)
     environment["PYTHONPATH"] = str(hostile)
@@ -745,7 +745,7 @@ def test_trusted_base_validator_reports_a_hostile_broken_entry_schema(
 
     assert result.returncode == 1
     assert result.stderr.splitlines() == [
-        "schema-v2.json: entry schema is not valid Draft 2020-12 JSON Schema"
+        "schema-v3.json: entry schema is not valid Draft 2020-12 JSON Schema"
     ]
     assert "Traceback" not in result.stdout + result.stderr
 
@@ -769,7 +769,7 @@ def test_trusted_base_validator_reports_a_hostile_broken_entry_schema(
         ("tools/render_validation.py", "# the render rules themselves moved\n", "decides what"),
         ("tools/score_validation.py", "# the score rules themselves moved\n", "decides what"),
         ("takedowns.json", '{"schema_version": 1, "takedowns": []}\n', "decides what"),
-        ("schema-v2.json", "{}\n", "decides what"),
+        ("schema-v3.json", "{}\n", "decides what"),
         ("scores-v1.json", "{}\n", "decides what"),
         ("README.md", "# something outside the record paths\n", "outside the record paths"),
     ],
@@ -924,7 +924,7 @@ def test_scoped_and_full_registration_date_checks_agree_for_a_new_v2(repo):
     repo.add_entry(
         identifier,
         2,
-        accepted_at="2026-07-30",
+        first_registered_on="2026-07-30",
         registered_at="2026-07-30T00:00:00Z",
     )
     repo.commit("version two with the wrong inherited date")

@@ -55,8 +55,8 @@ def test_snapshot_contains_every_public_artifact_for_active_entries(db, tmp_path
         (output / entry["verification"]["evidence_path"] / "review.json").read_text()
     )
     assert "scores" not in archived_review
-    assert all("scores" not in step for step in archived_review["passes"])
-    assert (output / "schema-v2.json").is_file()
+    assert all("scores" not in step for step in archived_review["checks"])
+    assert (output / "schema-v3.json").is_file()
     assert not (output / "schema-v1.json").exists()
     assert (output / "LICENSE").is_file()
     assert (output / "feed.xml").is_file()
@@ -136,7 +136,7 @@ def test_snapshot_refuses_internal_review_fields_in_public_evidence(db, tmp_path
         if field == "scores":
             review[field] = value
         else:
-            review["passes"] = [{"verdict": "pass", "findings": [{field: value}]}]
+            review["checks"] = [{"outcome": "neutral", "findings": [{field: value}]}]
 
     _rewrite_review(db, change)
     with pytest.raises(ValueError, match=f"review.*{field}, which no published review may carry"):
@@ -151,18 +151,18 @@ def test_snapshot_refuses_internal_review_fields_in_public_evidence(db, tmp_path
             lambda review: review.update({"confidence": 0.9}),
         ),
         (
-            "review.passes[0].raw_score",
+            "review.checks[0].raw_score",
             lambda review: review.update(
-                {"passes": [{"verdict": "pass", "raw_score": 4, "findings": []}]}
+                {"checks": [{"outcome": "neutral", "raw_score": 4, "findings": []}]}
             ),
         ),
         (
-            "review.passes[0].findings[0].model_rationale",
+            "review.checks[0].findings[0].model_rationale",
             lambda review: review.update(
                 {
-                    "passes": [
+                    "checks": [
                         {
-                            "verdict": "pass",
+                            "outcome": "neutral",
                             "findings": [
                                 {
                                     "evidence": "e",
@@ -201,9 +201,9 @@ def test_snapshot_refuses_a_new_object_inside_a_field_that_is_allowed(db, tmp_pa
         db,
         lambda review: review.update(
             {
-                "passes": [
+                "checks": [
                     {
-                        "verdict": "pass",
+                        "outcome": "neutral",
                         "sources_checked": [{"path": "README.md", "score": 2}],
                         "findings": [],
                     }
@@ -211,15 +211,15 @@ def test_snapshot_refuses_a_new_object_inside_a_field_that_is_allowed(db, tmp_pa
             }
         ),
     )
-    with pytest.raises(ValueError, match="unexpected object at review.passes"):
+    with pytest.raises(ValueError, match="unexpected object at review.checks"):
         stage_public(db.path, tmp_path / "release")
 
 
 @pytest.mark.parametrize(
     "value,complaint",
     [
-        (4, r"carries int at review\.passes\[0\]\.summary"),
-        ([["a rank", 2]], r"nests an array at review\.passes\[0\]\.summary"),
+        (4, r"carries int at review\.checks\[0\]\.summary"),
+        ([["a rank", 2]], r"nests an array at review\.checks\[0\]\.summary"),
     ],
 )
 def test_snapshot_refuses_a_number_where_a_review_carries_text(db, tmp_path, value, complaint):
@@ -227,7 +227,7 @@ def test_snapshot_refuses_a_number_where_a_review_carries_text(db, tmp_path, val
     _rewrite_review(
         db,
         lambda review: review.update(
-            {"passes": [{"verdict": "pass", "summary": value, "findings": []}]}
+            {"checks": [{"outcome": "neutral", "summary": value, "findings": []}]}
         ),
     )
     with pytest.raises(ValueError, match=complaint):
@@ -244,10 +244,10 @@ def test_snapshot_publishes_a_review_carrying_everything_a_review_may_carry(db, 
         db,
         lambda review: review.update(
             {
-                "passes": [
+                "checks": [
                     {
                         "step": "statement_alignment",
-                        "verdict": "warn",
+                        "outcome": "warning",
                         "summary": "What this pass concluded.",
                         "trust_level": "qualified",
                         "sources_checked": ["README.md"],
@@ -366,7 +366,7 @@ def test_a_record_that_carries_scores_is_refused_rather_than_published(db, tmp_p
     entry["review"]["scores"] = {"clarity": 4}
     db.write_json("entries/PALOMAR-2026-07-29-000001-v1.json", entry)
 
-    with pytest.raises(ValueError, match="fails schema-v2.json"):
+    with pytest.raises(ValueError, match="fails schema-v3.json"):
         stage_public(db.path, tmp_path / "release")
 
 
@@ -377,12 +377,12 @@ def test_staging_reports_an_unevaluable_entry_schema_without_fetching(
         raise AssertionError("entry schema staging attempted network retrieval")
 
     monkeypatch.setattr(urllib.request, "urlopen", forbid_network)
-    schema = db.read_json("schema-v2.json")
+    schema = db.read_json("schema-v3.json")
     schema["properties"]["unused_future_field"] = {
         "$ref": "https://example.invalid/hostile-entry-schema.json"
     }
     db.write_json(
-        "schema-v2.json",
+        "schema-v3.json",
         schema,
     )
 
@@ -392,10 +392,10 @@ def test_staging_reports_an_unevaluable_entry_schema_without_fetching(
 
 def test_a_numerically_equal_float_entry_version_is_not_published(db, tmp_path):
     entry = db.read_json("entries/PALOMAR-2026-07-29-000001-v1.json")
-    entry["schema_version"] = 2.0
+    entry["schema_version"] = 3.0
     db.write_json("entries/PALOMAR-2026-07-29-000001-v1.json", entry)
 
-    with pytest.raises(ValueError, match="must declare schema_version 2"):
+    with pytest.raises(ValueError, match="must declare schema_version 3"):
         stage_public(db.path, tmp_path / "release")
 
 
@@ -411,11 +411,11 @@ def test_one_schema_is_published_and_it_is_the_canonical_one(db, tmp_path):
     output = tmp_path / "release"
     stage_public(db.path, output)
 
-    served = output / "schema-v2.json"
-    assert served.read_bytes() == (db.path / "schema-v2.json").read_bytes()
+    served = output / "schema-v3.json"
+    assert served.read_bytes() == (db.path / "schema-v3.json").read_bytes()
     assert not (output / "schema-v1.json").exists()
-    assert not (output / "canonical-schema-v2.json").exists()
-    assert not (output / "public-schema-v2.json").exists()
+    assert not (output / "canonical-schema-v3.json").exists()
+    assert not (output / "public-schema-v3.json").exists()
 
     delta = json.loads((output / "release-delta.json").read_text())
     public_paths = {
@@ -423,7 +423,7 @@ def test_one_schema_is_published_and_it_is_the_canonical_one(db, tmp_path):
         for group in ("additions", "stable", "aggregates")
         for row in delta[group]
     }
-    assert "schema-v2.json" in public_paths
+    assert "schema-v3.json" in public_paths
     assert "schema-v1.json" not in public_paths
 
 

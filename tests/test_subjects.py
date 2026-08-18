@@ -61,7 +61,7 @@ def test_a_page_names_the_results_carrying_its_code(db, tmp_path):
     stage_public(db.path, site)
 
     page = _page(site, "msc", "05C10")
-    assert page["schema_version"] == 1
+    assert page["schema_version"] == 2
     assert page["kind"] == "msc"
     assert page["code"] == "05C10"
     assert [row["id"] for row in page["entries"]] == ["PALOMAR-2026-07-29-000002"]

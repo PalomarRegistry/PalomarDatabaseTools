@@ -518,3 +518,59 @@ def test_the_widening_stays_permitted_for_every_later_walk_of_the_history(repo):
     repo.add_entry("PALOMAR-2026-07-29-000002", 1)
     head = repo.commit("one more result")
     assert check_history(repo.path, head) == []
+
+
+def test_deleting_a_migration_manifest_is_forbidden(repo):
+    """The manifest is what says a crossing has already happened, so it may not
+    stop existing: the schema exception reads its absence as never-done."""
+    widen(repo)
+    repo.commit("the manifested widening")
+    repo.remove("migrations/classification-cardinality-v1.json")
+    errors = violations(repo)
+    assert any("never deleted or renamed" in error for error in errors)
+
+
+def test_deleting_and_reintroducing_a_manifest_cannot_re_arm_the_exception(repo):
+    widen(repo)
+    repo.commit("the manifested widening")
+    manifest = repo.read_json("migrations/classification-cardinality-v1.json")
+    repo.remove("migrations/classification-cardinality-v1.json")
+    deletion = repo.commit("drop the evidence")
+    import hashlib
+
+    schema = repo.read_json("schema-v3.json")
+    old = (repo.path / "schema-v3.json").read_bytes()
+    schema["properties"]["title"]["maxLength"] = 4000
+    repo.write_json("schema-v3.json", schema)
+    manifest["schema_change"]["old_sha256"] = hashlib.sha256(old).hexdigest()
+    manifest["schema_change"]["new_sha256"] = hashlib.sha256(
+        (repo.path / "schema-v3.json").read_bytes()
+    ).hexdigest()
+    repo.write_json("migrations/classification-cardinality-v1.json", manifest)
+    head = repo.commit("a second schema change wearing the same manifest")
+
+    # The deletion is refused where it happens, so the reintroduction never gets
+    # a base without the manifest to stand on.
+    assert any("never deleted or renamed" in error for error in check_history(repo.path, head))
+
+
+def test_modifying_a_migration_manifest_is_forbidden(repo):
+    widen(repo)
+    repo.commit("the manifested widening")
+    manifest = repo.read_json("migrations/classification-cardinality-v1.json")
+    manifest["schema_change"]["widened"] = []
+    repo.write_json("migrations/classification-cardinality-v1.json", manifest)
+    errors = violations(repo)
+    assert any("immutable, byte for byte" in error for error in errors)
+
+
+def test_a_manifest_that_is_not_an_ordinary_file_authorizes_nothing(repo):
+    import os
+
+    schema = repo.read_json("schema-v3.json")
+    schema["properties"]["classification"]["properties"]["arxiv"]["maxItems"] = 8
+    repo.write_json("schema-v3.json", schema)
+    (repo.path / "migrations").mkdir(exist_ok=True)
+    os.symlink("../schema-v3.json", repo.path / "migrations" / "classification-cardinality-v1.json")
+    errors = violations(repo)
+    assert any("schema-v3.json" in error and "frozen" in error for error in errors)

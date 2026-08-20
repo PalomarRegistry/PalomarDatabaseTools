@@ -42,6 +42,12 @@ SCORES_PREFIX = "scores/"
 # version it must never be rebound, while result and day projections continue
 # through validator-owned exact transitions.
 SUBMISSIONS_PREFIX = "registrations/submissions/"
+# A migration manifest is the permanent evidence for a change that crossed one
+# of these promises, and it is what says the crossing has already happened. Both
+# uses need it to be immutable: an audit reading it years later, and the schema
+# exception below, whose "the manifest is not in the base" test means "this has
+# never been done" only because a manifest that exists can never stop existing.
+MIGRATIONS_PREFIX = "migrations/"
 
 # A prefix, and what to say when a file under it is removed, changed, or has
 # its mode changed. The sentences are written out rather than composed, because
@@ -80,6 +86,14 @@ FROZEN = (
         "registered submission bindings are never deleted or renamed",
         "registered submission bindings are immutable, byte for byte",
         "the file mode of a registered submission binding may not change",
+    ),
+    (
+        MIGRATIONS_PREFIX,
+        "an adopted migration manifest is never deleted or renamed. "
+        "It is the permanent evidence for a change that crossed a promise.",
+        "an adopted migration manifest is immutable, byte for byte. "
+        "It records exactly which bytes the crossing it authorized moved.",
+        "the file mode of an adopted migration manifest may not change",
     ),
 )
 ENTRY_SCHEMA_NAME = "schema-v3.json"
@@ -139,16 +153,20 @@ def _is_frozen_path(path: str) -> bool:
     )
 
 
-def _blob(repo: pathlib.Path, rev: str, path: str) -> bytes | None:
-    """The bytes at `path` in `rev`, or None if nothing is there."""
-    try:
-        return subprocess.run(
-            ["git", "-C", str(repo), "show", f"{rev}:{path}"],
-            check=True,
-            capture_output=True,
-        ).stdout
-    except subprocess.CalledProcessError:
+def _listed(repo: pathlib.Path, rev: str, path: str) -> tuple[str, str] | None:
+    """The (mode, object id) of `path` in `rev`, or None if the path is absent.
+
+    `ls-tree` rather than `show`, because absence and an unreadable blob are
+    different answers and only the first one may relax anything. A missing blob
+    behind a listed path raises from `_git_object` instead of quietly reading as
+    absence, which would re-arm the exception in a damaged clone.
+    """
+    listing = _git(repo, "ls-tree", "-z", rev, "--", path).strip("\0")
+    if not listing:
         return None
+    meta, _tab, _name = listing.partition("\t")
+    mode, _kind, oid = meta.split(" ")
+    return mode, oid
 
 
 def _widening_manifested(
@@ -156,21 +174,28 @@ def _widening_manifested(
 ) -> bool:
     """Whether `head` introduces a manifest binding exactly this schema change.
 
-    Three things have to hold, and each of them is what stops this from becoming
-    a general licence to edit the schema. The manifest must be new in this
-    change, so it authorizes one transition rather than standing open. It must
-    name the entry schema. And it must carry the digest of the bytes on each
-    side, which is what makes recognising it a comparison rather than a
+    Four things have to hold, and each of them is what stops this from becoming
+    a general licence to edit the schema. The manifest must be absent from the
+    base and added by this change, so it authorizes one transition rather than
+    standing open. It must be an ordinary file, for the reason every frozen path
+    must be. It must name the entry schema. And it must carry the digest of the
+    bytes on each side, which makes recognising it a comparison rather than a
     judgement: bytes that do not hash to what the manifest says are not the
     transition it authorizes.
+
+    What makes "absent from the base" mean "never introduced" rather than "not
+    introduced yet" is that the manifest is itself a frozen path: once added it
+    can never be removed, so the exception can be armed exactly once. Without
+    that, deleting the manifest and reintroducing it beside a second schema edit
+    would pass both checks.
     """
-    if _blob(repo, base, SCHEMA_WIDENING_MANIFEST) is not None:
+    if _listed(repo, base, SCHEMA_WIDENING_MANIFEST) is not None:
         return False
-    encoded = _blob(repo, head, SCHEMA_WIDENING_MANIFEST)
-    if encoded is None:
+    listed = _listed(repo, head, SCHEMA_WIDENING_MANIFEST)
+    if listed is None or listed[0] != REGULAR_FILE:
         return False
     try:
-        manifest = json.loads(encoded)
+        manifest = json.loads(_git_object(repo, listed[1]))
     except ValueError:
         return False
     change = manifest.get("schema_change") if isinstance(manifest, dict) else None

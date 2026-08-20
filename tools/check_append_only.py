@@ -25,6 +25,8 @@ read whole trees and cost what the registry holds, so they run on a schedule.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import pathlib
 import subprocess
 import sys
@@ -82,6 +84,18 @@ FROZEN = (
 )
 ENTRY_SCHEMA_NAME = "schema-v3.json"
 LAUNCH_MARKER = ".palomar-launched"
+# The sole schema transition this check will accept, and only when the change
+# that makes it also introduces the manifest binding it. The manifest names the
+# exact bytes on both sides, so recognising it here is a digest comparison
+# rather than a judgement: a later change finds the manifest already in its base
+# and the schema is frozen again, over the new bytes.
+#
+# What this does not check is that the transition is a widening. That takes a
+# schema library and the whole published ledger, which is
+# `verify_classification_widening.py` in the database, run in place of the base
+# revision's checker for the one change that lands it. This check is what keeps
+# the same commit legal for every later walk of the history.
+SCHEMA_WIDENING_MANIFEST = "migrations/classification-cardinality-v1.json"
 
 # A published file must be an ordinary, non-executable file. A symlink freezes
 # only its target string, leaving the bytes a consumer actually reads mutable;
@@ -123,6 +137,58 @@ def _is_frozen_path(path: str) -> bool:
         path.startswith(tuple(prefix for prefix, *_messages in FROZEN))
         or path == ENTRY_SCHEMA_NAME
     )
+
+
+def _blob(repo: pathlib.Path, rev: str, path: str) -> bytes | None:
+    """The bytes at `path` in `rev`, or None if nothing is there."""
+    try:
+        return subprocess.run(
+            ["git", "-C", str(repo), "show", f"{rev}:{path}"],
+            check=True,
+            capture_output=True,
+        ).stdout
+    except subprocess.CalledProcessError:
+        return None
+
+
+def _widening_manifested(
+    repo: pathlib.Path, base: str, head: str, old_oid: str, new_oid: str
+) -> bool:
+    """Whether `head` introduces a manifest binding exactly this schema change.
+
+    Three things have to hold, and each of them is what stops this from becoming
+    a general licence to edit the schema. The manifest must be new in this
+    change, so it authorizes one transition rather than standing open. It must
+    name the entry schema. And it must carry the digest of the bytes on each
+    side, which is what makes recognising it a comparison rather than a
+    judgement: bytes that do not hash to what the manifest says are not the
+    transition it authorizes.
+    """
+    if _blob(repo, base, SCHEMA_WIDENING_MANIFEST) is not None:
+        return False
+    encoded = _blob(repo, head, SCHEMA_WIDENING_MANIFEST)
+    if encoded is None:
+        return False
+    try:
+        manifest = json.loads(encoded)
+    except ValueError:
+        return False
+    change = manifest.get("schema_change") if isinstance(manifest, dict) else None
+    if not isinstance(change, dict) or change.get("path") != ENTRY_SCHEMA_NAME:
+        return False
+    digests = {
+        side: hashlib.sha256(_git_object(repo, oid)).hexdigest()
+        for side, oid in (("old_sha256", old_oid), ("new_sha256", new_oid))
+    }
+    return all(change.get(side) == digest for side, digest in digests.items())
+
+
+def _git_object(repo: pathlib.Path, oid: str) -> bytes:
+    return subprocess.run(
+        ["git", "-C", str(repo), "cat-file", "blob", oid],
+        check=True,
+        capture_output=True,
+    ).stdout
 
 
 def _changes(repo: pathlib.Path, base: str, head: str) -> list[tuple[str, str, str, str, str, str]]:
@@ -178,7 +244,7 @@ def check(repo: pathlib.Path, base: str, head: str) -> list[str]:
             "files, so that freezing the path freezes the bytes."
         )
 
-    for path, status, old_mode, new_mode, _old_oid, _new_oid in _changes(repo, base, head):
+    for path, status, old_mode, new_mode, old_oid, new_oid in _changes(repo, base, head):
         if not _is_frozen_path(path):
             continue
 
@@ -203,9 +269,10 @@ def check(repo: pathlib.Path, base: str, head: str) -> list[str]:
                 )
             elif old_mode != new_mode:
                 errors.append(f"{path}: the file mode of the published entry schema may not change")
-            else:
+            elif not _widening_manifested(repo, base, head, old_oid, new_oid):
                 errors.append(
-                    f"{path}: modified, but it is the sole published entry schema and is frozen"
+                    f"{path}: modified, but it is the sole published entry schema and is "
+                    "frozen except by a manifested widening"
                 )
             continue
 

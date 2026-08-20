@@ -440,3 +440,81 @@ def test_a_run_after_launch_says_the_invariant_holds_and_warns_about_nothing(rep
     printed = capsys.readouterr().out
     assert "invariant holds" in printed
     assert "::warning::" not in printed
+
+
+# The manifested schema widening.
+
+
+def widen(repo, *, manifest: dict | None = None) -> tuple[str, str]:
+    """Widen the entry schema and bind the transition, as the migration does."""
+    import hashlib
+
+    relative = "schema-v3.json"
+    old = (repo.path / relative).read_bytes()
+    schema = repo.read_json(relative)
+    classification = schema["properties"]["classification"]["properties"]
+    classification["arxiv"].pop("maxItems", None)
+    classification["msc2020"]["minItems"] = 0
+    repo.write_json(relative, schema)
+    new = (repo.path / relative).read_bytes()
+    repo.write_json(
+        "migrations/classification-cardinality-v1.json",
+        manifest
+        or {
+            "schema_version": 1,
+            "migration": "classification-cardinality-v1",
+            "schema_change": {
+                "path": relative,
+                "old_sha256": hashlib.sha256(old).hexdigest(),
+                "new_sha256": hashlib.sha256(new).hexdigest(),
+                "widened": [
+                    "properties/classification/properties/arxiv/maxItems",
+                    "properties/classification/properties/msc2020/minItems",
+                ],
+            },
+        },
+    )
+    return hashlib.sha256(old).hexdigest(), hashlib.sha256(new).hexdigest()
+
+
+def test_a_manifested_widening_of_the_entry_schema_is_permitted(repo):
+    widen(repo)
+    assert violations(repo) == []
+
+
+def test_a_widening_whose_manifest_names_other_bytes_is_forbidden(repo):
+    old, _new = widen(repo)
+    manifest = repo.read_json("migrations/classification-cardinality-v1.json")
+    manifest["schema_change"]["new_sha256"] = "0" * 64
+    repo.write_json("migrations/classification-cardinality-v1.json", manifest)
+    errors = violations(repo)
+    assert any("schema-v3.json" in error and "frozen" in error for error in errors)
+    assert old != "0" * 64
+
+
+def test_an_unmanifested_schema_change_remains_forbidden(repo):
+    schema = repo.read_json("schema-v3.json")
+    schema["properties"]["classification"]["properties"]["arxiv"].pop("maxItems", None)
+    repo.write_json("schema-v3.json", schema)
+    errors = violations(repo)
+    assert any("schema-v3.json" in error and "frozen" in error for error in errors)
+
+
+def test_a_manifest_already_in_the_base_stops_authorizing_a_later_change(repo):
+    widen(repo)
+    repo.commit("the manifested widening")
+    schema = repo.read_json("schema-v3.json")
+    schema["properties"]["title"]["maxLength"] = 400
+    repo.write_json("schema-v3.json", schema)
+    errors = violations(repo)
+    assert any("schema-v3.json" in error and "frozen" in error for error in errors)
+
+
+def test_the_widening_stays_permitted_for_every_later_walk_of_the_history(repo):
+    from check_append_only import check_history
+
+    widen(repo)
+    repo.commit("the manifested widening")
+    repo.add_entry("PALOMAR-2026-07-29-000002", 1)
+    head = repo.commit("one more result")
+    assert check_history(repo.path, head) == []

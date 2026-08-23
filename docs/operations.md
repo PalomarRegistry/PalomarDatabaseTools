@@ -15,7 +15,7 @@ credentials:
 
 | GitHub environment | Environment secret | Used by |
 | --- | --- | --- |
-| `production` | `CLOUDFLARE_ACCOUNT_ID` | Worker deployment |
+| `production` | Variable `CLOUDFLARE_ACCOUNT_ID` | Worker deployment; public account id |
 | `production` | `CLOUDFLARE_API_TOKEN` | Worker deployment |
 | `source-availability-production` | `PALOMAR_AVAILABILITY_UPDATE_TOKEN` | Six-hourly availability refresh |
 
@@ -60,6 +60,11 @@ has no required reviewers and no wait timer; administrators can bypass its
 protection rules. Every successful `CI` run caused by a push to `main`
 automatically triggers `Deploy public-data Worker` for that exact commit, so
 branch protection on `main` is what decides which commits reach production.
+Set `CLOUDFLARE_ACCOUNT_ID` to the dedicated Palomar account
+`8e4d5f3bbdd2c4ab2b373721842acf9f`. It is an environment variable, not a
+secret; the same target is pinned in `worker/wrangler.jsonc` so a local deploy
+cannot silently follow whichever Cloudflare account Wrangler happens to infer.
+
 The deployment workflow verifies that the green commit still belongs to `main`
 and deploys both the inert and production Worker environments. It relies on the
 Worker checks and dry-run deployments already completed by `CI` instead of

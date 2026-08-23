@@ -1,5 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "8e4d5f3bbdd2c4ab2b373721842acf9f",
   "name": "palomar-data-staging",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-08",

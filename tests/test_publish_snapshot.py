@@ -15,6 +15,9 @@ import pathlib
 import pytest
 import release_delta
 from publish_snapshot import (
+    SERVED_RE,
+    STABLE_PATHS,
+    UNOWNED_PATHS,
     POINTER_KEY,
     _delete_keys,
     _ordering_path,
@@ -1650,6 +1653,14 @@ def test_the_audit_still_refuses_a_key_nothing_could_serve(tmp_path):
         Metadata={"sha256": "0" * 64},
     )
     assert audit(client, "bucket") == ["unexpected: public/browse/nonsense.json"]
+
+
+def test_every_owned_stable_root_path_is_in_the_served_grammar():
+    owned = set(STABLE_PATHS) - set(UNOWNED_PATHS)
+
+    assert owned == {"feed.xml", "recent.json", "recent-renders.json"}
+    assert all(SERVED_RE.fullmatch(path) for path in owned)
+    assert SERVED_RE.fullmatch("unknown.json") is None
 
 
 def test_the_audit_accepts_stable_tombstones_that_the_worker_serves(tmp_path):

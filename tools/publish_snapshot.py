@@ -94,7 +94,7 @@ DAY_PAGES = r"(?:[0-9]{4}\.json|[0-9]{4}-[0-9]{2}-[0-9]{2}/[1-9][0-9]*\.json)"
 CODE = r"(?:arxiv|msc)/[A-Za-z0-9.-]+"
 TERM = r"[a-z0-9]{2,32}"
 SERVED_RE = re.compile(
-    rf"^(?:feed\.xml|recent\.json"
+    rf"^(?:feed\.xml|recent\.json|recent-renders\.json"
     rf"|versions/PALOMAR-[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}-[0-9]{{6}}\.json"
     rf"|registration-identities/[0-9a-f]{{64}}\.json"
     rf"|repositories/[a-z0-9_.-]+/[a-z0-9_.-]+\.json"

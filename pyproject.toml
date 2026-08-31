@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "palomar-database-tools"
-version = "0.1.14"
+version = "0.1.15"
 description = "Public, data-independent tooling for Palomar Registry databases"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -24,6 +24,7 @@ py-modules = [
   "build_browse", "build_feeds", "build_recent", "build_registration_lookups",
   "build_search", "build_subjects", "bundle_reference_validation",
   "changed_records", "check_append_only", "check_published",
+  "correction_validation",
   "check_source_availability", "day_pages", "entry_validation",
   "evidence_validation", "lock_tool_requirements", "patch_surfaces",
   "publication_evidence", "public_source_availability",

@@ -20,7 +20,7 @@ import changed_records
 import registration_projection
 import release_delta
 import score_validation
-from entry_validation import ENTRY_SCHEMA_NAME, PALOMAR_ID_RE
+from entry_validation import ENTRY_SCHEMA_NAMES, PALOMAR_ID_RE
 from takedowns import committed_manifest_blob
 
 
@@ -34,6 +34,7 @@ ENTRY_PATH_RE = re.compile(
 # therefore force a complete run.
 GLOBAL_POLICY_PATHS = (
     "tools/bundle_reference_validation.py",
+    "tools/correction_validation.py",
     "tools/entry_validation.py",
     "tools/evidence_validation.py",
     "tools/render_validation.py",
@@ -93,7 +94,7 @@ def scope_of(root: pathlib.Path, base: str) -> ValidationScope | None:
 
     for path in sorted(changed):
         if path in GLOBAL_POLICY_PATHS or path in (
-            ENTRY_SCHEMA_NAME,
+            *ENTRY_SCHEMA_NAMES.values(),
             score_validation.SCORES_SCHEMA_NAME,
         ):
             print(f"validating everything: {path} decides what an existing record means")

@@ -23,6 +23,8 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 SCHEMA_VERSION = 2
+RESULT_SCHEMA_VERSION = 3
+SUPPORTED_SCHEMA_VERSIONS = frozenset({2, 3})
 RESULTS_DIRECTORY = "registrations/results"
 SUBMISSIONS_DIRECTORY = "registrations/submissions"
 DAYS_DIRECTORY = "registrations/days"
@@ -136,7 +138,7 @@ def _identity(entry: Mapping[str, Any]) -> dict[str, Any]:
 
 def version_summary(relative: str, entry: Mapping[str, Any]) -> dict[str, Any]:
     submission = entry.get("submission")
-    return {
+    summary = {
         "version": entry.get("version"),
         "submission_id": submission.get("submission_id")
         if isinstance(submission, Mapping)
@@ -148,6 +150,14 @@ def version_summary(relative: str, entry: Mapping[str, Any]) -> dict[str, Any]:
         "abstract": entry.get("abstract"),
         "classification": entry.get("classification"),
     }
+    correction = entry.get("registry_correction")
+    if isinstance(correction, Mapping):
+        summary["registry_correction"] = {
+            "generated_by": correction.get("generated_by"),
+            "explanation": correction.get("explanation"),
+            "changed_fields": correction.get("changed_fields"),
+        }
+    return summary
 
 
 def public_summary(row: Mapping[str, Any], identifier: str) -> dict[str, Any]:
@@ -230,12 +240,17 @@ def documents_for_entries(
             for _relative, entry in rows
         ):
             raise ValueError(f"{result_path(identifier)}: stable registration identity changed")
+        version_rows = [version_summary(relative, entry) for relative, entry in rows]
         result = {
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": (
+                RESULT_SCHEMA_VERSION
+                if any("registry_correction" in row for row in version_rows)
+                else SCHEMA_VERSION
+            ),
             "id": identifier,
             "first_registered_on": first_registered_on,
             "identity": identity,
-            "versions": [version_summary(relative, entry) for relative, entry in rows],
+            "versions": version_rows,
         }
         if enforce_contract:
             _validate_result_shape(result, identifier, result_path(identifier))
@@ -288,7 +303,7 @@ def load_result(root: pathlib.Path, identifier: str) -> dict[str, Any]:
 def _validate_result_shape(document: Mapping[str, Any], identifier: str, where: str) -> None:
     if set(document) != {"schema_version", "id", "first_registered_on", "identity", "versions"}:
         raise ValueError(f"{where}: has an unsupported result projection shape")
-    if type(document.get("schema_version")) is not int or document["schema_version"] != SCHEMA_VERSION:
+    if type(document.get("schema_version")) is not int or document["schema_version"] not in SUPPORTED_SCHEMA_VERSIONS:
         raise ValueError(f"{where}: unsupported schema_version")
     if document.get("id") != identifier:
         raise ValueError(f"{where}: id disagrees with its path")
@@ -319,9 +334,28 @@ def _validate_result_shape(document: Mapping[str, Any], identifier: str, where: 
         )
     keys = {"version", "submission_id", "registered_at", "title", "status", "path", "abstract", "classification"}
     submissions: set[str] = set()
+    has_correction = any(
+        isinstance(row, dict) and "registry_correction" in row for row in versions
+    )
+    expected_schema = RESULT_SCHEMA_VERSION if has_correction else SCHEMA_VERSION
+    if document["schema_version"] != expected_schema:
+        raise ValueError(f"{where}: schema_version disagrees with its version rows")
     for expected_version, row in enumerate(versions, 1):
-        if not isinstance(row, dict) or set(row) != keys:
+        if not isinstance(row, dict) or frozenset(row) not in {
+            frozenset(keys), frozenset({*keys, "registry_correction"})
+        }:
             raise ValueError(f"{where}: version {expected_version} has an unsupported shape")
+        correction = row.get("registry_correction")
+        if correction is not None and (
+            not isinstance(correction, dict)
+            or set(correction) != {"generated_by", "explanation", "changed_fields"}
+            or correction.get("generated_by") != "Palomar / Registry correction"
+            or not isinstance(correction.get("explanation"), str)
+            or not correction["explanation"]
+            or not isinstance(correction.get("changed_fields"), list)
+            or not correction["changed_fields"]
+        ):
+            raise ValueError(f"{where}: version {expected_version} has malformed correction data")
         submission_id = row.get("submission_id")
         if type(row.get("version")) is not int or row["version"] != expected_version:
             raise ValueError(f"{where}: versions must be ordered from 1 without gaps")
@@ -356,7 +390,7 @@ def _validate_submission_shape(
 ) -> None:
     if set(document) != {"schema_version", "submission_id", "id", "version", "entry_path"}:
         raise ValueError(f"{where}: has an unsupported submission projection shape")
-    if type(document.get("schema_version")) is not int or document["schema_version"] != SCHEMA_VERSION:
+    if type(document.get("schema_version")) is not int or document["schema_version"] not in SUPPORTED_SCHEMA_VERSIONS:
         raise ValueError(f"{where}: unsupported schema_version")
     if document.get("submission_id") != submission_id:
         raise ValueError(f"{where}: submission_id disagrees with its path")
@@ -372,7 +406,7 @@ def _validate_submission_shape(
 def _validate_day_shape(document: Mapping[str, Any], day: str, where: str) -> None:
     if set(document) != {"schema_version", "date", "last_serial"}:
         raise ValueError(f"{where}: has an unsupported day projection shape")
-    if type(document.get("schema_version")) is not int or document["schema_version"] != SCHEMA_VERSION:
+    if type(document.get("schema_version")) is not int or document["schema_version"] not in SUPPORTED_SCHEMA_VERSIONS:
         raise ValueError(f"{where}: unsupported schema_version")
     if document.get("date") != day or not _calendar_day(day):
         raise ValueError(f"{where}: date disagrees with its path")
@@ -390,7 +424,7 @@ def _validate_identity_shape(
     identifier = document.get("registration_id")
     if (
         type(document.get("schema_version")) is not int
-        or document["schema_version"] != SCHEMA_VERSION
+        or document["schema_version"] not in SUPPORTED_SCHEMA_VERSIONS
         or not isinstance(identity, dict)
         or set(identity)
         != {"source_repository", "project_path", "comparator_config_path"}
@@ -606,7 +640,11 @@ def validate_projections(
                 if version == 1 and match is not None:
                     day_new[match.group(1)].append(int(match.group(2)))
             completed_result = {
-                "schema_version": SCHEMA_VERSION,
+                "schema_version": (
+                    RESULT_SCHEMA_VERSION
+                    if any("registry_correction" in row for row in appended)
+                    else SCHEMA_VERSION
+                ),
                 "id": identifier,
                 "first_registered_on": first_registered_on,
                 "identity": identity,

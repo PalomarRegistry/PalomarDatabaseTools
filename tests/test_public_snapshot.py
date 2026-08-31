@@ -395,12 +395,12 @@ def test_a_numerically_equal_float_entry_version_is_not_published(db, tmp_path):
     entry["schema_version"] = 3.0
     db.write_json("entries/PALOMAR-2026-07-29-000001-v1.json", entry)
 
-    with pytest.raises(ValueError, match="must declare schema_version 3"):
+    with pytest.raises(ValueError, match="unsupported schema_version"):
         stage_public(db.path, tmp_path / "release")
 
 
-def test_one_schema_is_published_and_it_is_the_canonical_one(db, tmp_path):
-    """There were two, and they disagreed about `review.scores`.
+def test_every_immutable_schema_is_published_from_its_canonical_file(db, tmp_path):
+    """Each record is checked against the immutable contract it declares.
 
     The reviewer built a record against the canonical schema; the release
     served a different document under the same name; a record could satisfy

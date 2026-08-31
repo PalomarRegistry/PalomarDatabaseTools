@@ -1,4 +1,4 @@
-"""The sole canonical entry contract and its cross-field invariants.
+"""The immutable canonical entry contracts and their cross-field invariants.
 
 JSON Schema owns the shape of a record. The checks here own relationships a
 schema cannot express: URLs derived from repository identities, safe relative
@@ -30,9 +30,8 @@ from schema_policy import (
 
 ENTRY_SCHEMA_VERSION = 3
 ENTRY_SCHEMA_NAME = "schema-v3.json"
-ENTRY_SCHEMA_EVALUATION_ERROR = (
-    f"{ENTRY_SCHEMA_NAME}: entry schema cannot be evaluated safely"
-)
+ENTRY_SCHEMA_NAMES = {3: "schema-v3.json", 4: "schema-v4.json"}
+ENTRY_SCHEMA_EVALUATION_ERROR = "entry schema cannot be evaluated safely"
 PALOMAR_ID_RE = re.compile(
     r"PALOMAR-(?P<date>[0-9]{4}-[0-9]{2}-[0-9]{2})-(?P<serial>[0-9]{6})"
 )
@@ -67,68 +66,87 @@ class EntrySchemaUnevaluable(Exception):
     """The schema is valid JSON Schema syntax but cannot judge an entry."""
 
 
-def load_entry_schema(
+def load_entry_schemas(
     root: pathlib.Path,
-) -> tuple[jsonschema.Draft202012Validator | None, list[str]]:
-    """Load the sole entry schema without an invalid-policy fallback."""
+) -> tuple[dict[int, jsonschema.Draft202012Validator], list[str]]:
+    """Load every supported immutable entry schema without a fallback."""
     errors: list[str] = []
     for path in sorted(root.glob("schema-v*.json")):
-        if path.name != ENTRY_SCHEMA_NAME:
+        if path.name not in ENTRY_SCHEMA_NAMES.values():
             errors.append(
-                f"{path.name}: unsupported entry schema document; {ENTRY_SCHEMA_NAME} "
-                "is the sole current entry contract"
+                f"{path.name}: unsupported entry schema document"
             )
-
-    path = root / ENTRY_SCHEMA_NAME
-    if path.is_symlink() or not path.is_file():
-        errors.append(f"{ENTRY_SCHEMA_NAME}: the sole entry schema is missing or symbolic")
-        return None, errors
-    try:
-        mode = path.stat().st_mode
-    except OSError:
-        errors.append(f"{ENTRY_SCHEMA_NAME}: entry schema cannot be read")
-        return None, errors
-    if mode & 0o111:
-        errors.append(
-            f"{ENTRY_SCHEMA_NAME}: the sole entry schema must be a non-executable ordinary file"
-        )
-        return None, errors
-    try:
-        encoded = path.read_text(encoding="utf-8")
-    except OSError:
-        errors.append(f"{ENTRY_SCHEMA_NAME}: entry schema cannot be read")
-        return None, errors
-    except UnicodeError:
-        errors.append(f"{ENTRY_SCHEMA_NAME}: entry schema is not valid UTF-8")
-        return None, errors
-    try:
-        schema = parse_schema_json(encoded)
-    except InvalidSchemaJSON:
-        errors.append(f"{ENTRY_SCHEMA_NAME}: entry schema is not valid JSON")
-        return None, errors
-    if not isinstance(schema, dict):
-        errors.append(f"{ENTRY_SCHEMA_NAME}: entry schema must be a JSON object")
-        return None, errors
-    try:
-        jsonschema.Draft202012Validator.check_schema(schema)
-    except (jsonschema.SchemaError, RecursionError):
-        errors.append(
-            f"{ENTRY_SCHEMA_NAME}: entry schema is not valid Draft 2020-12 JSON Schema"
-        )
-        return None, errors
-    try:
-        validate_closed_schema_references(schema)
-    except UnsafeSchemaReferences:
-        errors.append(ENTRY_SCHEMA_EVALUATION_ERROR)
-        return None, errors
-    return (
-        jsonschema.Draft202012Validator(
+    validators: dict[int, jsonschema.Draft202012Validator] = {}
+    for version, schema_name in ENTRY_SCHEMA_NAMES.items():
+        path = root / schema_name
+        if path.is_symlink() or not path.is_file():
+            errors.append(f"{schema_name}: entry schema is missing or symbolic")
+            continue
+        try:
+            if path.stat().st_mode & 0o111:
+                errors.append(f"{schema_name}: entry schema must be non-executable")
+                continue
+            encoded = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            errors.append(f"{schema_name}: entry schema cannot be read as UTF-8")
+            continue
+        try:
+            schema = parse_schema_json(encoded)
+        except InvalidSchemaJSON:
+            errors.append(f"{schema_name}: entry schema is not valid JSON")
+            continue
+        if not isinstance(schema, dict):
+            errors.append(f"{schema_name}: entry schema must be a JSON object")
+            continue
+        try:
+            jsonschema.Draft202012Validator.check_schema(schema)
+            validate_closed_schema_references(schema)
+        except (jsonschema.SchemaError, RecursionError):
+            errors.append(f"{schema_name}: is not valid Draft 2020-12 JSON Schema")
+            continue
+        except UnsafeSchemaReferences:
+            errors.append(f"{schema_name}: {ENTRY_SCHEMA_EVALUATION_ERROR}")
+            continue
+        validators[version] = jsonschema.Draft202012Validator(
             schema,
             format_checker=jsonschema.FormatChecker(),
             registry=Registry(),
-        ),
-        errors,
-    )
+        )
+    return validators, errors
+
+
+def load_entry_schema(
+    root: pathlib.Path,
+) -> tuple[jsonschema.Draft202012Validator | None, list[str]]:
+    """Load immutable schema v3 for historical single-schema callers.
+
+    Known later immutable contracts are not alternate schemas. This adapter is
+    deliberately narrow; registration and publication use
+    :func:`load_entry_schemas` and select by each record's declared version.
+    """
+    validators, errors = load_entry_schemas(root)
+    compatibility_errors = [
+        error for error in errors if not error.startswith("schema-v4.json:")
+    ]
+    normalized: list[str] = []
+    for error in compatibility_errors:
+        if error.endswith(": unsupported entry schema document"):
+            normalized.append(
+                f"{error}; {ENTRY_SCHEMA_NAME} is the sole current entry contract"
+            )
+        elif error == f"{ENTRY_SCHEMA_NAME}: entry schema is missing or symbolic":
+            normalized.append(
+                f"{ENTRY_SCHEMA_NAME}: the sole entry schema is missing or symbolic"
+            )
+        elif error == f"{ENTRY_SCHEMA_NAME}: is not valid Draft 2020-12 JSON Schema":
+            normalized.append(
+                f"{ENTRY_SCHEMA_NAME}: entry schema is not valid Draft 2020-12 JSON Schema"
+            )
+        elif error == f"{ENTRY_SCHEMA_NAME}: {ENTRY_SCHEMA_EVALUATION_ERROR}":
+            normalized.append(ENTRY_SCHEMA_EVALUATION_ERROR)
+        else:
+            normalized.append(error)
+    return validators.get(ENTRY_SCHEMA_VERSION), normalized
 
 
 def entry_schema_violations(
@@ -194,7 +212,9 @@ def preservation_errors(name: str, data: Mapping[str, Any]) -> list[str]:
     actual_sources: list[tuple[object, object]] = []
     seen: set[tuple[str, str]] = set()
     identifier = data.get("id")
-    version = data.get("version")
+    correction = _mapping(data.get("registry_correction"))
+    based_on = _mapping(correction.get("based_on"))
+    version = based_on.get("version", data.get("version"))
     for position, value in enumerate(repositories):
         row = _mapping(value)
         repository = row.get("source_repository")

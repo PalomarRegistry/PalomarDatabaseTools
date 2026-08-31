@@ -24,6 +24,7 @@ from typing import Any
 
 import bundle_reference_validation
 import changed_records
+import correction_validation
 import evidence_validation
 import render_validation
 import registration_projection
@@ -32,13 +33,12 @@ import validation_scope
 
 from entry_validation import (
     EntrySchemaUnevaluable,
-    ENTRY_SCHEMA_NAME,
+    ENTRY_SCHEMA_NAMES,
     ENTRY_SCHEMA_EVALUATION_ERROR,
-    ENTRY_SCHEMA_VERSION,
     PALOMAR_ID_RE,
     entry_schema_violations,
     entry_consistency_errors,
-    load_entry_schema,
+    load_entry_schemas,
 )
 from takedowns import load_takedowns
 
@@ -136,11 +136,11 @@ def validate(
     # `validation_scope.scope_of` selects the complete checkout before
     # validation. The unscoped scheduled sweep checks the complete tree
     # independently.
-    validator, schema_errors = load_entry_schema(root)
+    validators, schema_errors = load_entry_schemas(root)
     errors.extend(schema_errors)
     # Keep cross-field and bundle checks running after one hostile reference
     # disables schema evaluation; setting validator to None would skip them.
-    schema_evaluable = validator is not None
+    schema_evaluable = bool(validators)
     expected_render_roots: set[str] = set()
     expected_evidence_roots: set[str] = set()
     loaded_entries: list[tuple[str, Mapping[str, Any]]] = []
@@ -200,23 +200,33 @@ def validate(
                 evidence_path,
             ):
                 expected_evidence_roots.add(evidence_path.rstrip("/"))
+        correction = data.get("registry_correction")
+        if isinstance(correction, dict) and isinstance(correction.get("evidence_path"), str):
+            correction_path = correction["evidence_path"]
+            if re.fullmatch(
+                rf"evidence/{PALOMAR_ID_RE.pattern}-v[1-9][0-9]*/[0-9a-f]{{64}}/",
+                correction_path,
+            ):
+                expected_evidence_roots.add(correction_path.rstrip("/"))
 
         expected_name = f"{data.get('id')}-v{data.get('version')}.json"
         if path.name != expected_name:
             errors.append(f"{name}: filename must be {expected_name}")
 
         version = data.get("schema_version")
-        if type(version) is not int or version != ENTRY_SCHEMA_VERSION:
+        if type(version) is not int or version not in ENTRY_SCHEMA_NAMES:
             errors.append(
-                f"{name}: schema_version must equal {ENTRY_SCHEMA_VERSION}; "
-                f"{ENTRY_SCHEMA_NAME} is the sole current entry contract"
+                f"{name}: schema_version must be one of "
+                f"{', '.join(map(str, ENTRY_SCHEMA_NAMES))}"
             )
-        elif validator is not None:
+        elif version in validators:
             if schema_evaluable:
                 try:
-                    violations = entry_schema_violations(validator, data)
+                    violations = entry_schema_violations(validators[version], data)
                 except EntrySchemaUnevaluable:
-                    errors.append(ENTRY_SCHEMA_EVALUATION_ERROR)
+                    errors.append(
+                        f"{ENTRY_SCHEMA_NAMES[version]}: {ENTRY_SCHEMA_EVALUATION_ERROR}"
+                    )
                     schema_evaluable = False
                 else:
                     for error in violations:
@@ -249,12 +259,14 @@ def validate(
                         or verification["evidence_path"].rstrip("/")
                         in touched_evidence_roots
                     )
-            if render_touched:
+            is_correction = isinstance(correction, dict)
+            if render_touched and not is_correction:
                 errors.extend(render_validation.validate_render(root, data, name))
-            if evidence_touched:
+            if evidence_touched and not is_correction:
                 errors.extend(evidence_validation.validate_evidence(root, data, name))
 
         errors.extend(entry_consistency_errors(name, data))
+        errors.extend(correction_validation.correction_errors(root, name, data))
         loaded_entries.append((name, data))
         identifier = data.get("id")
         entry_version = data.get("version")

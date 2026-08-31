@@ -53,6 +53,7 @@
     "/tombstones/PALOMAR-2026-08-07-383237-v1.json": "stable",
 
     "/schema-v3.json": "snapshot",
+    "/schema-v4.json": "snapshot",
     "/LICENSE": "snapshot",
     "/release-delta.json": "snapshot",
 

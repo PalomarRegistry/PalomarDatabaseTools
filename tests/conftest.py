@@ -69,6 +69,7 @@ class Database:
         self.path = path
         (path / "entries").mkdir(parents=True, exist_ok=True)
         shutil.copy(ROOT / "schema-v3.json", path / "schema-v3.json")
+        shutil.copy(ROOT / "schema-v4.json", path / "schema-v4.json")
         shutil.copy(
             ROOT / "tests" / "fixtures" / "synthetic-scores-schema.json",
             path / "scores-v1.json",

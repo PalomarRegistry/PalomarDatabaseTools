@@ -97,6 +97,7 @@ FROZEN = (
     ),
 )
 ENTRY_SCHEMA_NAME = "schema-v3.json"
+ENTRY_SCHEMA_NAMES = frozenset({ENTRY_SCHEMA_NAME, "schema-v4.json"})
 LAUNCH_MARKER = ".palomar-launched"
 # The schema transitions this check will accept, and only when the change that
 # makes one also introduces its named manifest binding it. The manifest names the
@@ -152,7 +153,7 @@ def _describe(mode: str) -> str:
 def _is_frozen_path(path: str) -> bool:
     return (
         path.startswith(tuple(prefix for prefix, *_messages in FROZEN))
-        or path == ENTRY_SCHEMA_NAME
+        or path in ENTRY_SCHEMA_NAMES
     )
 
 
@@ -291,16 +292,18 @@ def check(repo: pathlib.Path, base: str, head: str) -> list[str]:
             errors.append(not_ordinary(path, new_mode))
             continue
 
-        if path == ENTRY_SCHEMA_NAME:
+        if path in ENTRY_SCHEMA_NAMES:
             if status == "D":
                 errors.append(
                     f"{path}: deleted, but it is the sole published entry schema and is frozen"
                 )
             elif status == "A":
-                errors.append(
-                    f"{path}: added after launch, but the sole entry schema must exist "
-                    "when the launch marker is committed and is frozen thereafter"
-                )
+                # A new versioned contract may be introduced without changing
+                # the bytes or meaning of any older contract. From this commit
+                # onward the ordinary-file addition is frozen like its peers.
+                if path == "schema-v4.json":
+                    continue
+                errors.append(f"{path}: added after launch, but the published entry schema is frozen")
             elif old_mode != new_mode:
                 errors.append(f"{path}: the file mode of the published entry schema may not change")
             elif not _widening_manifested(repo, base, head, old_oid, new_oid):

@@ -29,10 +29,9 @@ from build_subjects import build_subjects
 from entry_validation import (
     EntrySchemaUnevaluable,
     ENTRY_SCHEMA_EVALUATION_ERROR,
-    ENTRY_SCHEMA_NAME,
-    ENTRY_SCHEMA_VERSION,
+    ENTRY_SCHEMA_NAMES,
     entry_schema_violations,
-    load_entry_schema,
+    load_entry_schemas,
 )
 from takedowns import committed_manifest_blob, load_takedowns, manifest_blob
 
@@ -278,6 +277,14 @@ def _summary(entry: dict[str, Any], relative: str) -> dict[str, Any]:
         "status": entry.get("status"),
         "path": relative,
     }
+    correction = entry.get("registry_correction")
+    if isinstance(correction, dict):
+        summary["registry_correction"] = {
+            "generated_by": correction.get("generated_by"),
+            "explanation": correction.get("explanation"),
+            "changed_fields": correction.get("changed_fields"),
+        }
+    return summary
 
 
 def _versions_of(
@@ -355,20 +362,25 @@ def _copy_record(root: pathlib.Path, output: pathlib.Path, summary: dict[str, An
     if isinstance(verification, dict) and isinstance(verification.get("evidence_path"), str):
         _assert_redacted_review(root / verification["evidence_path"] / "review.json")
         _copy_relative(root, output, verification["evidence_path"])
+    correction = entry.get("registry_correction")
+    if isinstance(correction, dict) and isinstance(correction.get("evidence_path"), str):
+        _assert_redacted_review(root / correction["evidence_path"] / "review.json")
+        _copy_relative(root, output, correction["evidence_path"])
 
 
 def _stage_schema(root: pathlib.Path, output: pathlib.Path) -> None:
-    """One schema, because there is one shape.
+    """Publish each immutable schema beside the records that declare it.
 
     It is both the contract the reviewer builds a record against and the schema
     of the data served, and those being the same document is the point: while
     they were two, a record could satisfy the contract and fail what was served
     beside it.
     """
-    schema = root / ENTRY_SCHEMA_NAME
-    if schema.is_symlink() or not schema.is_file():
-        raise ValueError(f"{ENTRY_SCHEMA_NAME} is missing or symbolic")
-    shutil.copy2(schema, output / ENTRY_SCHEMA_NAME)
+    for schema_name in ENTRY_SCHEMA_NAMES.values():
+        schema = root / schema_name
+        if schema.is_symlink() or not schema.is_file():
+            raise ValueError(f"{schema_name} is missing or symbolic")
+        shutil.copy2(schema, output / schema_name)
 
 
 def _check_against_schema(output: pathlib.Path, staged: list[dict[str, Any]]) -> None:
@@ -386,22 +398,22 @@ def _check_against_schema(output: pathlib.Path, staged: list[dict[str, Any]]) ->
     rather than once per record: this loop used to re-read and re-compile a
     twenty-three kilobyte document for every entry in the registry.
     """
-    validator, schema_errors = load_entry_schema(output)
+    validators, schema_errors = load_entry_schemas(output)
     if schema_errors:
         raise ValueError("; ".join(schema_errors))
-    if validator is None:
-        raise ValueError(f"{ENTRY_SCHEMA_NAME}: loader returned no validator")
-    validate_entry_schema_for_recent(validator.schema, ENTRY_SCHEMA_NAME)
+    if set(validators) != set(ENTRY_SCHEMA_NAMES):
+        raise ValueError("published entry schema set is incomplete")
+    for version, validator in validators.items():
+        validate_entry_schema_for_recent(validator.schema, ENTRY_SCHEMA_NAMES[version])
     for summary in staged:
         record = _load_json(output / summary["path"])
         version = record.get("schema_version")
-        if type(version) is not int or version != ENTRY_SCHEMA_VERSION:
+        if type(version) is not int or version not in validators:
             raise ValueError(
-                f"published {summary['path']} must declare schema_version "
-                f"{ENTRY_SCHEMA_VERSION}; {ENTRY_SCHEMA_NAME} is the sole entry contract"
+                f"published {summary['path']} declares an unsupported schema_version"
             )
         try:
-            errors = entry_schema_violations(validator, record)
+            errors = entry_schema_violations(validators[version], record)
         except EntrySchemaUnevaluable:
             raise ValueError(ENTRY_SCHEMA_EVALUATION_ERROR)
         if errors:
@@ -409,7 +421,9 @@ def _check_against_schema(output: pathlib.Path, staged: list[dict[str, Any]]) ->
                 f"{'/'.join(map(str, error.path)) or '(root)'}: {error.message}"
                 for error in errors[:3]
             )
-            raise ValueError(f"published {summary['path']} fails {ENTRY_SCHEMA_NAME}: {detail}")
+            raise ValueError(
+                f"published {summary['path']} fails {ENTRY_SCHEMA_NAMES[version]}: {detail}"
+            )
 
 
 def _write_tombstones(output: pathlib.Path, rows: list[dict[str, Any]]) -> None:
@@ -600,7 +614,10 @@ class Plan:
             active: list[tuple[dict[str, Any], dict[str, Any]]] = []
             previous_version = 0
             for position, row in enumerate(rows):
-                if not isinstance(row, dict) or set(row) != patch_surfaces.INDEX_ROW_KEYS:
+                if not isinstance(row, dict) or frozenset(row) not in {
+                    frozenset(patch_surfaces.INDEX_ROW_KEYS),
+                    frozenset({*patch_surfaces.INDEX_ROW_KEYS, "registry_correction"}),
+                }:
                     raise patch_surfaces.Rebuild(
                         f"the release being served has a malformed "
                         f"versions/{item.id}.json entries[{position}]"

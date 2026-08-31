@@ -482,6 +482,47 @@ def test_a_manifested_widening_of_the_entry_schema_is_permitted(repo):
     assert violations(repo) == []
 
 
+def test_a_hash_bound_orcid_evidence_widening_is_permitted(repo):
+    import hashlib
+
+    relative = "schema-v3.json"
+    old = (repo.path / relative).read_bytes()
+    schema = repo.read_json(relative)
+    person = schema["$defs"]["person"]
+    person["dependentRequired"] = {"orcid_record_checked_at": ["orcid"]}
+    person["properties"]["orcid_record_checked_at"] = {
+        "$ref": "#/$defs/timestamp"
+    }
+    repo.write_json(relative, schema)
+    new = (repo.path / relative).read_bytes()
+    repo.write_json(
+        "migrations/orcid-record-check-v1.json",
+        {
+            "schema_version": 1,
+            "migration": "orcid-record-check-v1",
+            "schema_change": {
+                "path": relative,
+                "old_sha256": hashlib.sha256(old).hexdigest(),
+                "new_sha256": hashlib.sha256(new).hexdigest(),
+                "widened": ["$defs/person/properties/orcid_record_checked_at"],
+            },
+        },
+    )
+
+    assert violations(repo) == []
+
+
+def test_two_manifests_cannot_authorize_one_schema_transition(repo):
+    widen(repo)
+    manifest = repo.read_json("migrations/classification-cardinality-v1.json")
+    duplicate = dict(manifest)
+    duplicate["migration"] = "orcid-record-check-v1"
+    repo.write_json("migrations/orcid-record-check-v1.json", duplicate)
+
+    errors = violations(repo)
+    assert any("schema-v3.json" in error and "frozen" in error for error in errors)
+
+
 def test_a_widening_whose_manifest_names_other_bytes_is_forbidden(repo):
     old, _new = widen(repo)
     manifest = repo.read_json("migrations/classification-cardinality-v1.json")

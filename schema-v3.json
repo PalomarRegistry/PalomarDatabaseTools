@@ -86,7 +86,7 @@
           },
           "orcid": {
             "type": "string",
-            "pattern": "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]$"
+            "pattern": "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9X]{4}$"
           },
           "orcid_record_checked_at": {
             "$ref": "#/$defs/timestamp",
@@ -897,7 +897,7 @@
         },
         "orcid": {
           "type": "string",
-          "pattern": "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]$"
+          "pattern": "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9X]{4}$"
         },
         "orcid_record_checked_at": {
           "$ref": "#/$defs/timestamp",

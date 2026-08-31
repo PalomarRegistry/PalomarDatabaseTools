@@ -98,18 +98,21 @@ FROZEN = (
 )
 ENTRY_SCHEMA_NAME = "schema-v3.json"
 LAUNCH_MARKER = ".palomar-launched"
-# The sole schema transition this check will accept, and only when the change
-# that makes it also introduces the manifest binding it. The manifest names the
+# The schema transitions this check will accept, and only when the change that
+# makes one also introduces its named manifest binding it. The manifest names the
 # exact bytes on both sides, so recognising it here is a digest comparison
 # rather than a judgement: a later change finds the manifest already in its base
 # and the schema is frozen again, over the new bytes.
 #
 # What this does not check is that the transition is a widening. That takes a
 # schema library and the whole published ledger, which is
-# `verify_classification_widening.py` in the database, run in place of the base
-# revision's checker for the one change that lands it. This check is what keeps
-# the same commit legal for every later walk of the history.
-SCHEMA_WIDENING_MANIFEST = "migrations/classification-cardinality-v1.json"
+# widening verifier in the database, run in place of the base revision's checker
+# for the change that lands it. This check is what keeps the same commit legal
+# for every later walk of the history.
+SCHEMA_WIDENING_MANIFESTS = (
+    "migrations/classification-cardinality-v1.json",
+    "migrations/orcid-record-check-v1.json",
+)
 
 # A published file must be an ordinary, non-executable file. A symlink freezes
 # only its target string, leaving the bytes a consumer actually reads mutable;
@@ -189,23 +192,29 @@ def _widening_manifested(
     that, deleting the manifest and reintroducing it beside a second schema edit
     would pass both checks.
     """
-    if _listed(repo, base, SCHEMA_WIDENING_MANIFEST) is not None:
-        return False
-    listed = _listed(repo, head, SCHEMA_WIDENING_MANIFEST)
-    if listed is None or listed[0] != REGULAR_FILE:
-        return False
-    try:
-        manifest = json.loads(_git_object(repo, listed[1]))
-    except ValueError:
-        return False
-    change = manifest.get("schema_change") if isinstance(manifest, dict) else None
-    if not isinstance(change, dict) or change.get("path") != ENTRY_SCHEMA_NAME:
-        return False
     digests = {
         side: hashlib.sha256(_git_object(repo, oid)).hexdigest()
         for side, oid in (("old_sha256", old_oid), ("new_sha256", new_oid))
     }
-    return all(change.get(side) == digest for side, digest in digests.items())
+    matches = 0
+    for manifest_path in SCHEMA_WIDENING_MANIFESTS:
+        if _listed(repo, base, manifest_path) is not None:
+            continue
+        listed = _listed(repo, head, manifest_path)
+        if listed is None or listed[0] != REGULAR_FILE:
+            continue
+        try:
+            manifest = json.loads(_git_object(repo, listed[1]))
+        except ValueError:
+            continue
+        change = manifest.get("schema_change") if isinstance(manifest, dict) else None
+        if (
+            isinstance(change, dict)
+            and change.get("path") == ENTRY_SCHEMA_NAME
+            and all(change.get(side) == digest for side, digest in digests.items())
+        ):
+            matches += 1
+    return matches == 1
 
 
 def _git_object(repo: pathlib.Path, oid: str) -> bytes:

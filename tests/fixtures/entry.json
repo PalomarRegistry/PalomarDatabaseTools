@@ -9,7 +9,9 @@
   "abstract": "For every C > 0 and every N there exist n \u2265 N and an n-point set P \u2286 \u211d\u00b2 whose number of unit-distance pairs exceeds n^(1 + C / log log n). This refutes Erd\u0151s's 1946 conjectured bound \u03bd(n) \u2264 n^(1 + C/log log n) for an absolute constant C. The theorem quantifies over C > 0; this is harmless because any bound with C \u2264 0 would imply the corresponding bound for a positive C.\n",
   "authors": [
     {
-      "name": "Kim Morrison"
+      "name": "Kim Morrison",
+      "orcid": "0000-0002-1825-0097",
+      "orcid_record_checked_at": "2026-08-31T12:00:00Z"
     }
   ],
   "classification": {

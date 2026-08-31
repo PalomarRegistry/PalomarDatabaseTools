@@ -67,6 +67,11 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
+        "dependentRequired": {
+          "orcid_record_checked_at": [
+            "orcid"
+          ]
+        },
         "required": [
           "name"
         ],
@@ -81,7 +86,11 @@
           },
           "orcid": {
             "type": "string",
-            "pattern": "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9X]{4}$"
+            "pattern": "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]$"
+          },
+          "orcid_record_checked_at": {
+            "$ref": "#/$defs/timestamp",
+            "description": "When Palomar confirmed that this exact iD named a current public ORCID record. This is not person authentication or proof of authorship."
           }
         }
       }
@@ -869,6 +878,11 @@
     "person": {
       "type": "object",
       "additionalProperties": false,
+      "dependentRequired": {
+        "orcid_record_checked_at": [
+          "orcid"
+        ]
+      },
       "required": [
         "name"
       ],
@@ -883,7 +897,11 @@
         },
         "orcid": {
           "type": "string",
-          "pattern": "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9X]{4}$"
+          "pattern": "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]$"
+        },
+        "orcid_record_checked_at": {
+          "$ref": "#/$defs/timestamp",
+          "description": "When Palomar confirmed that this exact iD named a current public ORCID record. This is not person authentication or proof of authorship."
         }
       }
     },

@@ -39,6 +39,22 @@ def test_the_sole_schema_and_fixture_agree_at_the_boundary():
     assert schema["properties"]["schema_version"]["const"] == ENTRY_SCHEMA_VERSION
 
 
+def test_orcid_check_evidence_is_paired_but_legacy_orcids_remain_valid():
+    validator, errors = load_entry_schema(ROOT)
+    entry = json.loads((ROOT / "tests/fixtures/entry.json").read_text())
+    assert errors == []
+    assert validator is not None
+
+    legacy = copy.deepcopy(entry)
+    legacy["authors"][0].pop("orcid_record_checked_at")
+    assert entry_schema_violations(validator, legacy) == []
+
+    unpaired = copy.deepcopy(entry)
+    unpaired["authors"][0].pop("orcid")
+    violations = entry_schema_violations(validator, unpaired)
+    assert any("dependency of 'orcid_record_checked_at'" in str(violation) for violation in violations)
+
+
 def test_schema_discovery_rejects_an_alternate_entry_contract(db):
     db.write_json("schema-v99.json", {})
 

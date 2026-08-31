@@ -70,5 +70,5 @@ def test_runtime_smoke_rejects_an_unused_external_entry_reference(
     assert smoke_source_availability.main() == 1
     captured = capsys.readouterr()
     assert captured.err.splitlines() == [
-        "schema-v3.json: entry schema cannot be evaluated safely"
+        "entry schema cannot be evaluated safely"
     ]

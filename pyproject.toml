@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "palomar-database-tools"
-version = "0.1.13"
+version = "0.1.14"
 description = "Public, data-independent tooling for Palomar Registry databases"
 readme = "README.md"
 requires-python = ">=3.11"

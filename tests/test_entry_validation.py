@@ -26,6 +26,7 @@ from validate import validate
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+SCHEMA_V3_EVALUATION_ERROR = f"schema-v3.json: {ENTRY_SCHEMA_EVALUATION_ERROR}"
 
 
 def test_the_sole_schema_and_fixture_agree_at_the_boundary():
@@ -126,7 +127,7 @@ def test_an_unreadable_entry_schema_is_a_deterministic_error(
 
     assert load_entry_schema(db.path) == (
         None,
-        ["schema-v3.json: entry schema cannot be read"],
+        ["schema-v3.json: entry schema cannot be read as UTF-8"],
     )
 
 
@@ -135,7 +136,7 @@ def test_non_utf8_entry_schema_is_a_closed_read_error(db):
 
     assert load_entry_schema(db.path) == (
         None,
-        ["schema-v3.json: entry schema is not valid UTF-8"],
+        ["schema-v3.json: entry schema cannot be read as UTF-8"],
     )
 
 
@@ -217,7 +218,7 @@ def test_an_unused_external_reference_is_red_in_an_empty_registry(db):
     }
     db.write_json(ENTRY_SCHEMA_NAME, schema)
 
-    assert validate(db.path) == [ENTRY_SCHEMA_EVALUATION_ERROR]
+    assert validate(db.path) == [SCHEMA_V3_EVALUATION_ERROR]
 
 
 def test_the_pure_evaluator_translates_an_unexpected_library_failure():
@@ -247,7 +248,7 @@ def test_runtime_schema_failure_is_once_only_and_keeps_other_checks(
 
     errors = validate(db.path)
 
-    assert errors.count(ENTRY_SCHEMA_EVALUATION_ERROR) == 1
+    assert errors.count(SCHEMA_V3_EVALUATION_ERROR) == 1
     assert (
         "entries/PALOMAR-2026-07-29-000001-v9.json: filename must be "
         "PALOMAR-2026-07-29-000001-v1.json"
@@ -268,7 +269,7 @@ def test_an_unevaluable_schema_precedes_but_keeps_independent_entry_errors(db):
     errors = validate(db.path)
 
     assert errors[:2] == [
-        ENTRY_SCHEMA_EVALUATION_ERROR,
+        SCHEMA_V3_EVALUATION_ERROR,
         "entries/PALOMAR-2026-07-29-000001-v9.json: filename must be "
         "PALOMAR-2026-07-29-000001-v1.json",
     ]
@@ -319,7 +320,7 @@ def test_the_loader_reports_one_recursive_schema_error_for_multiple_entries(db):
     )
 
     assert result.returncode == 1
-    assert result.stderr.splitlines() == [ENTRY_SCHEMA_EVALUATION_ERROR]
+    assert result.stderr.splitlines() == [SCHEMA_V3_EVALUATION_ERROR]
     assert "Traceback" not in result.stdout + result.stderr
 
 

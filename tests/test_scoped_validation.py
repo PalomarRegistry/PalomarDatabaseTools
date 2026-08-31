@@ -41,6 +41,7 @@ TRUSTED_TOOLS = (
     "validate.py",
     "validation_scope.py",
     "bundle_reference_validation.py",
+    "correction_validation.py",
     "entry_validation.py",
     "schema_policy.py",
     "evidence_validation.py",
@@ -511,7 +512,9 @@ def test_a_scoped_run_keeps_an_unevaluable_at_rest_entry_schema_red(repo):
     scope = scope_of(repo.path, base)
 
     assert scope is not None
-    assert validate(repo.path, scope) == [ENTRY_SCHEMA_EVALUATION_ERROR]
+    assert validate(repo.path, scope) == [
+        f"schema-v3.json: {ENTRY_SCHEMA_EVALUATION_ERROR}"
+    ]
 
 
 def test_validation_catches_every_unpublished_commit_since_the_served_release(
@@ -745,7 +748,7 @@ def test_trusted_base_validator_reports_a_hostile_broken_entry_schema(
 
     assert result.returncode == 1
     assert result.stderr.splitlines() == [
-        "schema-v3.json: entry schema is not valid Draft 2020-12 JSON Schema"
+        "schema-v3.json: is not valid Draft 2020-12 JSON Schema"
     ]
     assert "Traceback" not in result.stdout + result.stderr
 

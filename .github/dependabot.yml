@@ -4,6 +4,16 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Version-update pull requests are disabled because Dependabot edits
+    # pyproject.toml and requirements-tools.in but cannot regenerate the
+    # hash-pinned closures, which tools/lock_tool_requirements.py resolves with
+    # a pinned uv against a fixed interpreter and platform, resolving the test
+    # lock under the production lock as a constraint. Every such pull request
+    # therefore leaves the locks stale and fails `python -m pip check` in
+    # `register`. Live advisories for the production closure are covered by the
+    # weekly pip-audit in dependency-audit.yml, and this setting leaves
+    # Dependabot security updates enabled.
+    open-pull-requests-limit: 0
   - package-ecosystem: npm
     directory: /worker
     schedule:

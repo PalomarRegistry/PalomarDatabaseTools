@@ -56,6 +56,7 @@ NON_PUBLICATION_INPUTS = frozenset({
     "requirements-test.txt",
     "tooling.lock.json",
     ".github/workflows/publish.yml",
+    "tools/check_web_compatibility.py",
     "tools/validate.py",
     "tools/validation_scope.py",
 })

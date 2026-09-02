@@ -321,6 +321,28 @@ def test_incremental_recent_uses_the_complete_arriving_entry(repo, tmp_path):
     assert actual == recent_row(entry, 1)
 
 
+def test_incremental_retry_repairs_an_interrupted_browse_page(repo, tmp_path):
+    repo.commit("the served release")
+    previous = _delta(repo, tmp_path, "browse-retry-base")
+    repo.add_entry(FIRST, 2)
+    repo.commit("accept a second version")
+
+    _delta(repo, tmp_path, "browse-retry-whole", full=True)
+    day_page = "browse/2026-07-29/1.json"
+    shutil.copyfile(
+        tmp_path / "browse-retry-whole" / day_page,
+        tmp_path / "served" / day_page,
+    )
+
+    _delta(repo, tmp_path, "browse-retry", previous=previous)
+    candidate = json.loads((tmp_path / "browse-retry" / day_page).read_text())
+    year = json.loads((tmp_path / "browse-retry" / "browse/2026.json").read_text())
+    day = next(row for row in year["days"] if row["day"] == "2026-07-29")
+
+    assert day["versions"] == len(candidate["entries"]) == 2
+    assert day["results"] == len({row["id"] for row in candidate["entries"]}) == 1
+
+
 def test_publication_catches_up_from_the_served_release_not_the_previous_push(
     repo, tmp_path
 ):

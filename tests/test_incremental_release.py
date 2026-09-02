@@ -75,7 +75,13 @@ def test_a_full_rebuild_is_the_answer_to_every_uncertainty(db, tmp_path):
 
 
 @pytest.mark.parametrize(
-    "orchestration_path", ["tooling.lock.json", ".github/workflows/publish.yml"]
+    "orchestration_path",
+    [
+        "tooling.lock.json",
+        ".github/workflows/publish.yml",
+        "tools/validate.py",
+        "tools/validation_scope.py",
+    ],
 )
 def test_orchestration_only_changes_do_not_rewrite_the_registry(
     repo, tmp_path, orchestration_path

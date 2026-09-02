@@ -20,6 +20,7 @@ proved the old records are untouched" is not a fact this one may assume.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import pathlib
@@ -28,13 +29,19 @@ import subprocess
 import sys
 
 import pytest
+import registration_projection
 import release_delta
 import validate as validate_module
 import validation_scope as validation_scope_module
 from entry_validation import ENTRY_SCHEMA_EVALUATION_ERROR
 from stage_public import stage_public
 from validate import FULL_CHECKOUT_EXIT, validate
-from validation_scope import ValidationScope, scope_of, sparse_checkout_paths
+from validation_scope import (
+    ValidationScope,
+    scope_of,
+    sparse_checkout_paths,
+    sparse_dependency_paths,
+)
 
 SECOND = "PALOMAR-2026-07-29-000002"
 TRUSTED_TOOLS = (
@@ -183,6 +190,63 @@ def test_sparse_checkout_does_not_reopen_an_unchanged_withdrawal(repo):
 
     assert f"entries/{first}-v1.json" not in paths
     assert f"entries/{identifier}-v1.json" in paths
+
+
+def test_sparse_dependencies_include_a_correction_baseline_and_reused_identity(repo):
+    identifier = "PALOMAR-2026-07-29-000001"
+    baseline = repo.path / f"entries/{identifier}-v1.json"
+    base = repo.commit("before a metadata correction")
+    corrected = repo.entry_data(identifier, 2)
+    corrected["registry_correction"] = {
+        "based_on": {
+            "path": f"entries/{identifier}-v1.json",
+            "version": 1,
+            "sha256": hashlib.sha256(baseline.read_bytes()).hexdigest(),
+        }
+    }
+    repo.install_entry(corrected)
+    repo.commit("accept a metadata correction")
+
+    scope = scope_of(repo.path, base)
+    assert scope is not None
+    dependencies = sparse_dependency_paths(repo.path, scope)
+    result = repo.read_json(f"registrations/results/{identifier}.json")
+
+    assert f"entries/{identifier}-v1.json" in dependencies
+    assert registration_projection.identity_path(result["identity"]) in dependencies
+    assert not set(dependencies) & set(sparse_checkout_paths(scope))
+
+
+def test_sparse_dependency_cli_uses_nul_delimited_paths(tmp_path, repo):
+    root = pathlib.Path(__file__).resolve().parents[1]
+    identifier = "PALOMAR-2026-07-29-000001"
+    base = repo.commit("before another version")
+    repo.add_entry(identifier, 2)
+    repo.commit("accept another version")
+    output = tmp_path / "dependency-paths"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(root / "tools/validate.py"),
+            "--root",
+            str(repo.path),
+            "--since",
+            base,
+            "--sparse-dependencies",
+            str(output),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert output.read_bytes().endswith(b"\0")
+    result_projection = repo.read_json(f"registrations/results/{identifier}.json")
+    assert registration_projection.identity_path(result_projection["identity"]).encode() in (
+        output.read_bytes().split(b"\0")
+    )
 
 
 def test_an_arriving_version_named_by_a_new_takedown_cannot_use_the_narrow_path(

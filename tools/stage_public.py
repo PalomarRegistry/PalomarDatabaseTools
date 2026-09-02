@@ -45,7 +45,6 @@ FULL_REBUILD_INPUTS = frozenset(
         "schema-v3.json",
         "scores-v1.json",
         "takedowns.json",
-        ".github/workflows/publish.yml",
     }
 )
 NON_PUBLICATION_INPUTS = frozenset({
@@ -55,6 +54,8 @@ NON_PUBLICATION_INPUTS = frozenset({
     "requirements-tools.in",
     "requirements-test.in",
     "requirements-test.txt",
+    "tooling.lock.json",
+    ".github/workflows/publish.yml",
 })
 NON_PUBLICATION_PREFIXES = (".github/", "docs/", "tests/", "worker/")
 FULL_REQUIRED_EXIT = 3

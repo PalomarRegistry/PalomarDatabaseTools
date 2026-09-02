@@ -74,6 +74,24 @@ def test_a_full_rebuild_is_the_answer_to_every_uncertainty(db, tmp_path):
     assert first["records"]["root"] == release_delta.root_of(first["additions"])
 
 
+@pytest.mark.parametrize(
+    "orchestration_path", ["tooling.lock.json", ".github/workflows/publish.yml"]
+)
+def test_orchestration_only_changes_do_not_rewrite_the_registry(
+    repo, tmp_path, orchestration_path
+):
+    base = repo.commit("the served database revision")
+    previous = _delta(repo, tmp_path, "orchestration-base")
+    repo.write(orchestration_path, "orchestration changed\n")
+    repo.add_entry(SECOND, 1)
+    repo.commit("accept one result with an orchestration change")
+
+    current = _delta(repo, tmp_path, "orchestration-next", previous=previous)
+
+    assert current["parent"] == release_delta.release_id(previous)
+    assert current["database_commit"] != base
+
+
 def test_an_unknown_parent_commit_rebuilds_rather_than_guessing(db, tmp_path, capsys):
     first = _delta(db, tmp_path, "first")
     first["database_commit"] = "9" * 40

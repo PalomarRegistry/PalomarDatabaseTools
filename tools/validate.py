@@ -361,6 +361,12 @@ def main(argv: list[str] | None = None) -> int:
         f"{FULL_CHECKOUT_EXIT} requests the complete checkout instead",
     )
     parser.add_argument(
+        "--sparse-dependencies",
+        type=pathlib.Path,
+        help="after --sparse-paths has been materialized, write the exact unchanged "
+        "correction-baseline and registration-identity dependencies, NUL-delimited",
+    )
+    parser.add_argument(
         "--previous-base",
         type=pathlib.Path,
         help="bind a scoped publication to the authenticated served publication base; "
@@ -370,13 +376,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.previous_base is not None and args.since is None:
         parser.error("--previous-base requires --since")
 
-    if args.sparse_paths is not None:
+    if args.sparse_paths is not None or args.sparse_dependencies is not None:
         if args.since is None:
-            parser.error("--sparse-paths requires --since")
+            parser.error("sparse path planning requires --since")
+        if args.sparse_paths is not None and args.sparse_dependencies is not None:
+            parser.error("choose --sparse-paths or --sparse-dependencies")
+        output = args.sparse_paths or args.sparse_dependencies
+        assert output is not None
         scope = validation_scope.scope_of(args.root, args.since)
-        args.sparse_paths.parent.mkdir(parents=True, exist_ok=True)
+        output.parent.mkdir(parents=True, exist_ok=True)
         if scope is None:
-            args.sparse_paths.write_bytes(b"")
+            output.write_bytes(b"")
             print("complete checkout required")
             return FULL_CHECKOUT_EXIT
         if args.previous_base is not None:
@@ -384,13 +394,22 @@ def main(argv: list[str] | None = None) -> int:
                 args.root, scope, args.previous_base
             )
             if parent_errors:
-                args.sparse_paths.write_bytes(b"")
+                output.write_bytes(b"")
                 print(f"complete checkout required: {parent_errors[0]}")
                 return FULL_CHECKOUT_EXIT
-        paths = validation_scope.sparse_checkout_paths(scope)
+        paths = (
+            validation_scope.sparse_checkout_paths(scope)
+            if args.sparse_paths is not None
+            else validation_scope.sparse_dependency_paths(args.root, scope)
+        )
         encoded = b"".join(path.encode("utf-8") + b"\0" for path in paths)
-        args.sparse_paths.write_bytes(encoded)
-        print(f"sparse accepted checkout: {len(paths)} current path(s)")
+        output.write_bytes(encoded)
+        kind = (
+            "accepted checkout"
+            if args.sparse_paths is not None
+            else "dependency checkout"
+        )
+        print(f"sparse {kind}: {len(paths)} current path(s)")
         return 0
 
     # Said here as well as by the append-only check, because this is the job a

@@ -178,6 +178,50 @@ def sparse_checkout_paths(scope: ValidationScope) -> tuple[str, ...]:
     return tuple(sorted(scope.frozen_paths | scope.registration_paths))
 
 
+def sparse_dependency_paths(
+    root: pathlib.Path, scope: ValidationScope
+) -> tuple[str, ...]:
+    """Unchanged current blobs needed to validate one accepted delta.
+
+    The first sparse phase materializes only attested additions and changed
+    projections.  Once those bytes are present, a correction can name its
+    immutable predecessor and an appended version's result projection can
+    name the unchanged identity authority that must be read at the validated
+    base.  Resolve only those two closed, canonical dependency classes; every
+    semantic check remains the complete validator's job.
+    """
+    dependencies: set[str] = set()
+    for relative in sorted(scope.entries):
+        try:
+            entry = json.loads((root / relative).read_bytes())
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        correction = entry.get("registry_correction") if isinstance(entry, dict) else None
+        based_on = correction.get("based_on") if isinstance(correction, dict) else None
+        path = based_on.get("path") if isinstance(based_on, dict) else None
+        if isinstance(path, str) and ENTRY_PATH_RE.fullmatch(path):
+            dependencies.add(path)
+
+    for relative in sorted(scope.registration_paths):
+        if registration_projection.RESULT_PATH_RE.fullmatch(relative) is None:
+            continue
+        try:
+            result = json.loads((root / relative).read_bytes())
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        identity = result.get("identity") if isinstance(result, dict) else None
+        if not isinstance(identity, dict) or set(identity) != {
+            "source_repository", "project_path", "comparator_config_path"
+        }:
+            continue
+        try:
+            dependencies.add(registration_projection.identity_path(identity))
+        except (KeyError, TypeError):
+            continue
+
+    return tuple(sorted(dependencies - scope.frozen_paths - scope.registration_paths))
+
+
 def scoped_parent_errors(
     root: pathlib.Path,
     scope: ValidationScope,

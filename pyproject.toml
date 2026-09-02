@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 license = "MIT"
 dependencies = [
   "boto3==1.40.0",
-  "jsonschema[format-nongpl]==4.25.0",
+  "jsonschema[format-nongpl]==4.26.0",
   "referencing==0.37.0",
 ]
 

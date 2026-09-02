@@ -79,6 +79,7 @@ def test_a_full_rebuild_is_the_answer_to_every_uncertainty(db, tmp_path):
     [
         "tooling.lock.json",
         ".github/workflows/publish.yml",
+        "tools/check_web_compatibility.py",
         "tools/validate.py",
         "tools/validation_scope.py",
     ],

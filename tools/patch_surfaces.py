@@ -81,6 +81,7 @@ class Touched:
         self.id = identifier
         self.every = every
         self.active = active
+        self.prior_active: list[tuple[dict[str, Any], dict[str, Any]]] | None = None
 
     @property
     def current(self) -> tuple[dict[str, Any], dict[str, Any]] | None:
@@ -300,6 +301,7 @@ def _patch_collection(
     where: str,
     changes: dict[str, list[dict[str, Any]]],
     head_extra: dict[str, Any] | None = None,
+    baseline_changes: dict[str, list[dict[str, Any]]] | None = None,
 ) -> None:
     """Rewrite the pages a change touches, and the two documents above them.
 
@@ -317,6 +319,9 @@ def _patch_collection(
     document = _read(prior, head)
     all_years = _head_years(document, head, head_extra) if document is not None else {}
     coordinates = {identifier: day_pages.coordinate(identifier) for identifier in changes}
+    identifiers_by_page: dict[tuple[str, str, int], list[str]] = {}
+    for identifier, coordinate in coordinates.items():
+        identifiers_by_page.setdefault(coordinate, []).append(identifier)
 
     # The head down, so that a document which is missing can be told apart from
     # one that was never written. Read the other way round, a year document
@@ -349,8 +354,30 @@ def _patch_collection(
                 if found is not None
                 else []
             )
+            if baseline_changes is not None:
+                for baseline_identifier in identifiers_by_page[key]:
+                    if baseline_identifier not in baseline_changes:
+                        raise Rebuild(
+                            f"{relative} has no authenticated baseline for "
+                            f"{baseline_identifier}"
+                        )
+                    existing = [
+                        row
+                        for row in existing
+                        if str(row["id"]) != baseline_identifier
+                    ] + baseline_changes[baseline_identifier]
             pages[key] = existing
             before[key] = _counts(existing)
+            if (
+                known is not None
+                and int(known["first_page"]) == number
+                and int(known["last_page"]) == number
+            ):
+                # A cancelled publication can have replaced this sole day
+                # page before its year document. Anchor both to the served
+                # version indexes so retrying applies the transition once,
+                # rather than treating the interrupted page as the parent.
+                known["results"], known["versions"] = before[key]
         pages[key] = [
             row for row in pages[key] if str(row["id"]) != identifier
         ] + rows
@@ -438,6 +465,11 @@ def patch(
         head=BROWSE_HEAD,
         where=BROWSE_DIRECTORY,
         changes={item.id: [summary for summary, _entry in item.active] for item in touched},
+        baseline_changes={
+            item.id: [summary for summary, _entry in item.prior_active]
+            for item in touched
+            if item.prior_active is not None
+        },
     )
 
     by_code: dict[tuple[str, str], dict[str, list[dict[str, Any]]]] = {}

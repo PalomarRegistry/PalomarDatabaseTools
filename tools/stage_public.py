@@ -639,6 +639,7 @@ class Plan:
                     )
                 previous_version = version
                 active.append(historical[version])
+            item.prior_active = list(active)
             active.extend(
                 pair
                 for pair in item.every

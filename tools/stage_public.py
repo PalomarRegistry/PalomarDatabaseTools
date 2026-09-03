@@ -45,7 +45,6 @@ FULL_REBUILD_INPUTS = frozenset(
         "schema-v3.json",
         "scores-v1.json",
         "takedowns.json",
-        ".github/workflows/publish.yml",
     }
 )
 NON_PUBLICATION_INPUTS = frozenset({
@@ -55,6 +54,11 @@ NON_PUBLICATION_INPUTS = frozenset({
     "requirements-tools.in",
     "requirements-test.in",
     "requirements-test.txt",
+    "tooling.lock.json",
+    ".github/workflows/publish.yml",
+    "tools/check_web_compatibility.py",
+    "tools/validate.py",
+    "tools/validation_scope.py",
 })
 NON_PUBLICATION_PREFIXES = (".github/", "docs/", "tests/", "worker/")
 FULL_REQUIRED_EXIT = 3
@@ -635,6 +639,7 @@ class Plan:
                     )
                 previous_version = version
                 active.append(historical[version])
+            item.prior_active = list(active)
             active.extend(
                 pair
                 for pair in item.every
@@ -719,9 +724,12 @@ def plan(root: pathlib.Path, previous: dict[str, Any] | None, full: bool = False
     rebuild_inputs = {
         path
         for path in changed_paths
-        if path in FULL_REBUILD_INPUTS
-        or path.startswith("tools/")
-        or path.startswith(".github/workflows/publish-")
+        if path not in ignored_changes
+        and (
+            path in FULL_REBUILD_INPUTS
+            or path.startswith("tools/")
+            or path.startswith(".github/workflows/publish-")
+        )
     }
     rebuild_inputs |= (
         changed_paths

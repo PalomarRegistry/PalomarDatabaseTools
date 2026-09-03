@@ -151,7 +151,7 @@ def test_a_noncanonical_or_malformed_delta_fails_closed(tmp_path):
         publication_evidence.verify(delta_path, commit=COMMIT, entries=bundled)
 
 
-def test_every_immutable_addition_must_belong_to_an_entry_addition(tmp_path):
+def test_a_historical_immutable_addition_requires_canonical_git(tmp_path):
     delta_path = tmp_path / "release-delta.json"
     delta = _write_delta(delta_path)
     delta["additions"].append(
@@ -160,12 +160,70 @@ def test_every_immutable_addition_must_belong_to_an_entry_addition(tmp_path):
     delta["additions"] = sorted(delta["additions"], key=lambda row: row["path"])
     delta_path.write_bytes(release_delta.canonical_bytes(delta))
 
-    with pytest.raises(ValueError, match="no matching entry addition"):
+    first_raw = _write_record(tmp_path / "entries", FIRST)
+    first_row = next(
+        row for row in delta["additions"] if row["path"] == f"entries/{FIRST}.json"
+    )
+    first_row["bytes"] = len(first_raw)
+    first_row["sha256"] = hashlib.sha256(first_raw).hexdigest()
+    delta_path.write_bytes(release_delta.canonical_bytes(delta))
+    _write_record(tmp_path / "entries", "PALOMAR-2026-08-08-999999-v1")
+    _write_record(tmp_path / "entries", SECOND)
+    with pytest.raises(ValueError, match="needs the canonical Git checkout"):
         publication_evidence.prepare(
             delta_path,
             commit=COMMIT,
             entries=tmp_path / "entries",
             bundle_entries=tmp_path / "health-entries",
+        )
+
+
+def test_historical_additions_are_bound_to_the_committed_entry(repo, tmp_path):
+    historical = FIRST
+    current = SECOND
+    historical_id, historical_version = historical.rsplit("-v", 1)
+    current_id, current_version = current.rsplit("-v", 1)
+    repo.add_entry(historical_id, int(historical_version))
+    repo.add_entry(current_id, int(current_version))
+    commit = repo.commit("current entry and historical correction dependency")
+
+    delta_path = tmp_path / "release-delta.json"
+    delta = _write_delta(delta_path, commit=commit, target=current)
+    delta["stable"] = []
+    current_raw = (repo.path / f"entries/{current}.json").read_bytes()
+    current_row = next(
+        row for row in delta["additions"] if row["path"] == f"entries/{current}.json"
+    )
+    current_row["bytes"] = len(current_raw)
+    current_row["sha256"] = hashlib.sha256(current_raw).hexdigest()
+    delta["additions"].append(
+        _row(f"evidence/{historical}/{'f' * 64}/evidence-manifest.json")
+    )
+    delta["additions"] = sorted(delta["additions"], key=lambda row: row["path"])
+    delta_path.write_bytes(release_delta.canonical_bytes(delta))
+    bundled = tmp_path / "health-entries"
+
+    publication_evidence.prepare(
+        delta_path,
+        database=repo.path,
+        commit=commit,
+        entries=repo.path / "entries",
+        bundle_entries=bundled,
+    )
+    assert publication_evidence.verify(
+        delta_path,
+        commit=commit,
+        entries=bundled,
+        database=repo.path,
+    ) == ([historical, current], [])
+
+    (bundled / f"{historical}.json").write_bytes(current_raw)
+    with pytest.raises(ValueError, match="disagrees with its path|disagrees with canonical Git"):
+        publication_evidence.verify(
+            delta_path,
+            commit=commit,
+            entries=bundled,
+            database=repo.path,
         )
 
 

@@ -74,6 +74,31 @@ def test_a_full_rebuild_is_the_answer_to_every_uncertainty(db, tmp_path):
     assert first["records"]["root"] == release_delta.root_of(first["additions"])
 
 
+@pytest.mark.parametrize(
+    "orchestration_path",
+    [
+        "tooling.lock.json",
+        ".github/workflows/publish.yml",
+        "tools/check_web_compatibility.py",
+        "tools/validate.py",
+        "tools/validation_scope.py",
+    ],
+)
+def test_orchestration_only_changes_do_not_rewrite_the_registry(
+    repo, tmp_path, orchestration_path
+):
+    base = repo.commit("the served database revision")
+    previous = _delta(repo, tmp_path, "orchestration-base")
+    repo.write(orchestration_path, "orchestration changed\n")
+    repo.add_entry(SECOND, 1)
+    repo.commit("accept one result with an orchestration change")
+
+    current = _delta(repo, tmp_path, "orchestration-next", previous=previous)
+
+    assert current["parent"] == release_delta.release_id(previous)
+    assert current["database_commit"] != base
+
+
 def test_an_unknown_parent_commit_rebuilds_rather_than_guessing(db, tmp_path, capsys):
     first = _delta(db, tmp_path, "first")
     first["database_commit"] = "9" * 40
@@ -294,6 +319,28 @@ def test_incremental_recent_uses_the_complete_arriving_entry(repo, tmp_path):
     actual = next(row for row in recent["entries"] if row["id"] == SECOND)
 
     assert actual == recent_row(entry, 1)
+
+
+def test_incremental_retry_repairs_an_interrupted_browse_page(repo, tmp_path):
+    repo.commit("the served release")
+    previous = _delta(repo, tmp_path, "browse-retry-base")
+    repo.add_entry(FIRST, 2)
+    repo.commit("accept a second version")
+
+    _delta(repo, tmp_path, "browse-retry-whole", full=True)
+    day_page = "browse/2026-07-29/1.json"
+    shutil.copyfile(
+        tmp_path / "browse-retry-whole" / day_page,
+        tmp_path / "served" / day_page,
+    )
+
+    _delta(repo, tmp_path, "browse-retry", previous=previous)
+    candidate = json.loads((tmp_path / "browse-retry" / day_page).read_text())
+    year = json.loads((tmp_path / "browse-retry" / "browse/2026.json").read_text())
+    day = next(row for row in year["days"] if row["day"] == "2026-07-29")
+
+    assert day["versions"] == len(candidate["entries"]) == 2
+    assert day["results"] == len({row["id"] for row in candidate["entries"]}) == 1
 
 
 def test_publication_catches_up_from_the_served_release_not_the_previous_push(

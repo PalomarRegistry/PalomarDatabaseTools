@@ -17,7 +17,7 @@ import xml.etree.ElementTree as ET
 import pytest
 import release_delta
 
-from stage_public import stage_public
+from stage_public import _assert_public_correction_decision, stage_public
 
 
 def _take_down(db, identifier, version):
@@ -128,6 +128,43 @@ def _rewrite_review(db, change):
     review = json.loads(review_path.read_text())
     change(review)
     review_path.write_text(json.dumps(review))
+
+
+def test_snapshot_refuses_an_unknown_field_in_a_correction_decision(tmp_path):
+    path = tmp_path / "correction-decision.json"
+    path.write_text(json.dumps({
+        "schema_version": 1,
+        "kind": "registry-metadata-correction",
+        "submission_id": "a1b2c3d4e5f6",
+        "source": {"repository": "owner/repo", "commit": "1" * 40},
+        "mechanical_report": "https://example.test/run/1",
+        "policy_commit": "2" * 40,
+        "decided_at": "2026-09-06T00:00:00Z",
+        "outcome": "neutral",
+        "summary": "A deterministic decision.",
+        "based_on": {
+            "id": "PALOMAR-2026-08-31-000001",
+            "version": 1,
+            "path": "entries/PALOMAR-2026-08-31-000001-v1.json",
+            "sha256": "3" * 64,
+        },
+        "changed_fields": ["title"],
+        "inherited_review": {
+            "reviewed_at": "2026-08-31T00:00:00Z",
+            "policy_commit": "4" * 40,
+            "outcome": "neutral",
+            "reviewer_models": ["codex:test"],
+            "warnings": [],
+            "report": {"sha256": "5" * 64},
+        },
+        "inherited_scores": {
+            "path": "scores/PALOMAR-2026-08-31-000001-v1.json",
+            "sha256": "6" * 64,
+        },
+        "model_rationale": "private reasoning",
+    }))
+    with pytest.raises(ValueError, match="model_rationale"):
+        _assert_public_correction_decision(path)
 
 
 @pytest.mark.parametrize("field,value", [("scores", {"clarity": 4}), ("severity", "info")])

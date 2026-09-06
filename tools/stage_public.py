@@ -116,6 +116,32 @@ PUBLIC_REVIEW_PASS_KEYS = frozenset({
     "declarations_checked",
 })
 PUBLIC_REVIEW_FINDING_KEYS = frozenset({"evidence", "message"})
+PUBLIC_CORRECTION_DECISION_KEYS = frozenset({
+    "schema_version",
+    "kind",
+    "submission_id",
+    "source",
+    "mechanical_report",
+    "policy_commit",
+    "decided_at",
+    "outcome",
+    "summary",
+    "based_on",
+    "changed_fields",
+    "inherited_review",
+    "inherited_scores",
+})
+PUBLIC_CORRECTION_BASELINE_KEYS = frozenset({"id", "version", "path", "sha256"})
+PUBLIC_CORRECTION_SCORE_KEYS = frozenset({"path", "sha256"})
+PUBLIC_INHERITED_REVIEW_KEYS = frozenset({
+    "reviewed_at",
+    "policy_commit",
+    "outcome",
+    "reviewer_models",
+    "warnings",
+    "report",
+})
+PUBLIC_INHERITED_REPORT_KEYS = frozenset({"sha256", "source_url"})
 
 
 def _load_json(path: pathlib.Path) -> Any:
@@ -133,6 +159,36 @@ def _assert_public_keys(value: Any, allowed: frozenset[str], location: str) -> d
             + ", which no published review may carry"
         )
     return value
+
+
+def _assert_public_correction_decision(path: pathlib.Path) -> None:
+    """Keep a correction decision from becoming a route for private fields."""
+    decision = _assert_public_keys(
+        _load_json(path), PUBLIC_CORRECTION_DECISION_KEYS, "correction decision"
+    )
+    _assert_public_keys(
+        decision.get("source"), PUBLIC_REVIEW_SOURCE_KEYS, "correction decision.source"
+    )
+    _assert_public_keys(
+        decision.get("based_on"),
+        PUBLIC_CORRECTION_BASELINE_KEYS,
+        "correction decision.based_on",
+    )
+    _assert_public_keys(
+        decision.get("inherited_scores"),
+        PUBLIC_CORRECTION_SCORE_KEYS,
+        "correction decision.inherited_scores",
+    )
+    review = _assert_public_keys(
+        decision.get("inherited_review"),
+        PUBLIC_INHERITED_REVIEW_KEYS,
+        "correction decision.inherited_review",
+    )
+    _assert_public_keys(
+        review.get("report"),
+        PUBLIC_INHERITED_REPORT_KEYS,
+        "correction decision.inherited_review.report",
+    )
 
 
 def _assert_public_leaf(value: Any, location: str, *, inside_list: bool = False) -> None:
@@ -368,7 +424,15 @@ def _copy_record(root: pathlib.Path, output: pathlib.Path, summary: dict[str, An
         _copy_relative(root, output, verification["evidence_path"])
     correction = entry.get("registry_correction")
     if isinstance(correction, dict) and isinstance(correction.get("evidence_path"), str):
-        _assert_redacted_review(root / correction["evidence_path"] / "review.json")
+        correction_root = root / correction["evidence_path"]
+        legacy_review = correction_root / "review.json"
+        if legacy_review.is_file():
+            _assert_redacted_review(legacy_review)
+        else:
+            correction_decision = correction_root / "correction-decision.json"
+            if not correction_decision.is_file():
+                raise ValueError("registry correction evidence has no public decision")
+            _assert_public_correction_decision(correction_decision)
         _copy_relative(root, output, correction["evidence_path"])
 
 

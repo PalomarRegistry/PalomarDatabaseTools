@@ -83,6 +83,39 @@ def test_unchanged_score_bytes_are_not_reopened_in_a_scoped_run(db):
     )
 
 
+def test_a_new_registry_correction_must_project_the_baseline_scores(db):
+    baseline_entry = _entries(db)[0][1]
+    corrected = copy.deepcopy(baseline_entry)
+    corrected["schema_version"] = 4
+    corrected["version"] = 2
+    corrected["submission"]["submission_id"] = "b1b2c3d4e5f6"
+    corrected["registry_correction"] = {
+        "based_on": {
+            "version": 1,
+            "path": f"entries/{baseline_entry['id']}-v1.json",
+            "sha256": "0" * 64,
+        }
+    }
+    db.write_json(f"entries/{baseline_entry['id']}-v2.json", corrected)
+    baseline_score = db.read_json(f"scores/{baseline_entry['id']}-v1.json")
+    corrected_score = {**baseline_score, "version": 2}
+    relative = f"scores/{baseline_entry['id']}-v2.json"
+    db.write_json(relative, corrected_score)
+
+    assert score_validation.validate_scores(
+        db.path, _entries(db), frozenset({relative})
+    ) == []
+
+    corrected_score["scores"]["literature"] -= 1
+    db.write_json(relative, corrected_score)
+    assert any(
+        "must inherit the baseline scores exactly" in error
+        for error in score_validation.validate_scores(
+            db.path, _entries(db), frozenset({relative})
+        )
+    )
+
+
 def test_the_score_schema_is_applied_at_the_boundary(db):
     scores = db.read_json(f"scores/{ENTRY}")
     scores["scores"]["clarity"] = 6

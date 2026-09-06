@@ -14,7 +14,7 @@ def _write_json(path, value):
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _fixture(root):
+def _fixture(root, *, inherited_review=False):
     _write_json(root / "takedowns.json", {"schema_version": 1, "takedowns": []})
     baseline = {
         "schema_version": 3,
@@ -44,6 +44,15 @@ def _fixture(root):
     baseline_path = root / f"entries/{ID}-v1.json"
     _write_json(baseline_path, baseline)
     baseline_sha = hashlib.sha256(baseline_path.read_bytes()).hexdigest()
+    baseline_scores_path = root / f"scores/{ID}-v1.json"
+    _write_json(baseline_scores_path, {
+        "schema_version": 1,
+        "id": ID,
+        "version": 1,
+        "reviewed_at": "2026-08-31T00:00:00Z",
+        "policy_commit": "1" * 40,
+        "scores": {},
+    })
     based_on = {
         "version": 1,
         "path": f"entries/{ID}-v1.json",
@@ -56,7 +65,10 @@ def _fixture(root):
         "registered_at": "2026-08-31T01:00:00Z",
         "title": "Transcription",
         "review": {"outcome": "neutral"},
-        "submission": {"authorization": {"relationship": "palomar-maintainer"}},
+        "submission": {
+            "submission_id": "b1b2c3d4e5f6",
+            "authorization": {"relationship": "palomar-maintainer"},
+        },
     })
     correction = {
         "kind": "registry-metadata-correction",
@@ -70,15 +82,23 @@ def _fixture(root):
             "schema_version": 1,
             "id": ID,
             **based_on,
-            "inherited": [
-                "source", "formalization", "verification", "challenge_render",
-                "preservation", "trust",
-            ],
+            "inherited": (
+                [
+                    "source", "formalization", "verification", "challenge_render",
+                    "preservation", "trust", "review", "scores",
+                ]
+                if inherited_review
+                else [
+                    "source", "formalization", "verification", "challenge_render",
+                    "preservation", "trust",
+                ]
+            ),
         },
         "correction-report.json": {
             "schema_version": 2,
             "status": "pass",
             "stage": "correction-validation",
+            "workflow_url": "https://github.com/PalomarRegistry/PalomarSubmission/actions/runs/1",
             "submission": {"registry_correction": {
                 "explanation": correction["explanation"],
                 "changed_fields": correction["changed_fields"],
@@ -86,7 +106,34 @@ def _fixture(root):
             }},
         },
         "workflow-run.json": {"schema_version": 1},
-        "review.json": {"schema_version": 3},
+        (
+            "correction-decision.json" if inherited_review else "review.json"
+        ): (
+            {
+                "schema_version": 1,
+                "kind": "registry-metadata-correction",
+                "submission_id": "b1b2c3d4e5f6",
+                "source": {"repository": "owner/repo", "commit": "1" * 40},
+                "mechanical_report": "https://github.com/PalomarRegistry/PalomarSubmission/actions/runs/1",
+                "policy_commit": "2" * 40,
+                "decided_at": "2026-09-06T00:00:00Z",
+                "outcome": "neutral",
+                "summary": (
+                    "The proposed registry metadata correction passed mechanical validation. "
+                    "No automated editorial review was run; the active baseline review and "
+                    "its private scores will be inherited unchanged."
+                ),
+                "based_on": {"id": ID, **based_on},
+                "changed_fields": correction["changed_fields"],
+                "inherited_review": baseline["review"],
+                "inherited_scores": {
+                    "path": f"scores/{ID}-v1.json",
+                    "sha256": hashlib.sha256(baseline_scores_path.read_bytes()).hexdigest(),
+                },
+            }
+            if inherited_review
+            else {"schema_version": 3}
+        ),
     }
     encoded = {
         name: (json.dumps(value, indent=2, sort_keys=True) + "\n").encode()
@@ -105,7 +152,7 @@ def _fixture(root):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
     _write_json(bundle / "evidence-manifest.json", {
-        "schema_version": 2,
+        "schema_version": 3 if inherited_review else 2,
         "evidence_tree_sha256": tree_hash,
         "files": manifest_files,
     })
@@ -134,6 +181,44 @@ def test_changed_fields_is_derived_instead_of_trusted(tmp_path):
     entry["registry_correction"]["changed_fields"] = ["abstract"]
     errors = correction_errors(tmp_path, f"entries/{ID}-v2.json", entry)
     assert any("changed_fields: must exactly describe" in error for error in errors)
+
+
+def test_a_new_correction_inherits_review_and_records_a_deterministic_decision(tmp_path):
+    entry = _fixture(tmp_path, inherited_review=True)
+    assert correction_errors(
+        tmp_path,
+        f"entries/{ID}-v2.json",
+        entry,
+        require_review_inheritance=True,
+    ) == []
+
+
+def test_a_new_correction_cannot_replace_the_baseline_review(tmp_path):
+    entry = _fixture(tmp_path, inherited_review=True)
+    entry["review"] = {"outcome": "neutral", "warnings": ["replacement"]}
+    errors = correction_errors(
+        tmp_path,
+        f"entries/{ID}-v2.json",
+        entry,
+        require_review_inheritance=True,
+    )
+    assert any(":review: registry corrections must inherit" in error for error in errors)
+
+
+def test_a_new_correction_decision_is_a_closed_public_document(tmp_path):
+    entry = _fixture(tmp_path, inherited_review=True)
+    evidence = tmp_path / entry["registry_correction"]["evidence_path"]
+    decision_path = evidence / "correction-decision.json"
+    decision = json.loads(decision_path.read_text())
+    decision["model_rationale"] = "private reasoning"
+    _write_json(decision_path, decision)
+    errors = correction_errors(
+        tmp_path,
+        f"entries/{ID}-v2.json",
+        entry,
+        require_review_inheritance=True,
+    )
+    assert any("does not bind the inherited review" in error for error in errors)
 
 
 def test_the_active_baseline_may_precede_a_taken_down_latest_version(tmp_path):

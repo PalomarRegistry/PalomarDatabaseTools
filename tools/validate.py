@@ -266,7 +266,16 @@ def validate(
                 errors.extend(evidence_validation.validate_evidence(root, data, name))
 
         errors.extend(entry_consistency_errors(name, data))
-        errors.extend(correction_validation.correction_errors(root, name, data))
+        errors.extend(
+            correction_validation.correction_errors(
+                root,
+                name,
+                data,
+                require_review_inheritance=(
+                    name not in correction_validation.LEGACY_REREVIEWED_CORRECTIONS
+                ),
+            )
+        )
         loaded_entries.append((name, data))
         identifier = data.get("id")
         entry_version = data.get("version")

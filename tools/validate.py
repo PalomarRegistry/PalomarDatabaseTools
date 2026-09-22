@@ -219,7 +219,9 @@ def validate(
                 f"{name}: schema_version must be one of "
                 f"{', '.join(map(str, ENTRY_SCHEMA_NAMES))}"
             )
-        elif version not in validators and schema_evaluable:
+        elif version not in validators and not (root / ENTRY_SCHEMA_NAMES[version]).exists():
+            # An optional contract the database has not published yet; a broken
+            # or unevaluable published one is already reported by its loader.
             errors.append(
                 f"{name}: {ENTRY_SCHEMA_NAMES[version]} is not published, so a "
                 f"schema {version} record cannot be validated"

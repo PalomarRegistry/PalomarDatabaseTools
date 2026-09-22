@@ -1,0 +1,79 @@
+name: Dependabot
+
+# Dependabot bumps `worker/package.json` and the lockfile, but it cannot run
+# `wrangler types`. That generator's output tracks the installed wrangler, so a
+# wrangler bump leaves the committed `worker-configuration.d.ts` stale and the
+# `git diff --exit-code` step in ci.yml fails. Without the regeneration below, a
+# Dependabot wrangler pull request can never go green, the same trap that pip
+# version updates hit in dependabot.yml.
+#
+# `pull_request_target` is what makes a write token available at all: runs
+# triggered by Dependabot on `pull_request` get a read-only GITHUB_TOKEN. The
+# usual hazard of that trigger is executing untrusted code with a write token,
+# narrowed here by running only for Dependabot and by `npm ci --ignore-scripts`,
+# so no install hook from a bumped package executes.
+
+on:
+  pull_request_target:
+    paths:
+      - worker/package.json
+      - worker/package-lock.json
+      - .github/workflows/**
+
+permissions:
+  contents: read
+
+jobs:
+  worker-types:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          # Needed to push the regenerated file back; every other checkout in
+          # this repository leaves credentials off.
+          persist-credentials: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.18.0"
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npx wrangler types --env-interface Env
+      - name: Commit the regenerated types
+        run: |
+          if git diff --quiet -- worker-configuration.d.ts; then
+            echo "worker-configuration.d.ts is already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: regenerate worker-configuration.d.ts" -- worker-configuration.d.ts
+          git push origin HEAD:"$HEAD_REF"
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+
+  auto-merge:
+    # Every dependency in worker/package.json is a devDependency, and pip
+    # version updates are already disabled, so there is no production closure
+    # for this to land unreviewed. Required checks still have to pass.
+    if: github.actor == 'dependabot[bot]'
+    needs: worker-types
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Enable auto-merge
+        run: gh pr merge "$PR_URL" --auto --squash
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

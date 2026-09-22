@@ -1,0 +1,41 @@
+name: Dependabot
+
+# Auto-merge for Dependabot bumps. There is no checkout and nothing from the
+# pull request is executed here, so no untrusted code ever meets the write
+# token; the four required checks in ci.yml remain the whole gate.
+#
+# Scoped to direct development dependencies of the npm package in worker/.
+# GitHub Actions updates are deliberately excluded: they change the execution
+# control plane of every workflow in this repository and deserve a human. A
+# production dependency added later also falls outside this filter, which is
+# the safe direction to fail.
+
+on: pull_request
+
+permissions:
+  contents: read
+
+jobs:
+  auto-merge:
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        id: metadata
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Enable auto-merge
+        if: >-
+          steps.metadata.outputs.package-ecosystem == 'npm_and_yarn' &&
+          steps.metadata.outputs.dependency-type == 'direct:development'
+        run: gh pr merge "$PR_URL" --auto --squash
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

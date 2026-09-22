@@ -87,8 +87,9 @@ jobs:
           cache-dependency-path: worker/package-lock.json
       - run: npm ci
       - run: npm run audit:dependencies
+      # Generated from wrangler.jsonc by the installed wrangler, so it is built
+      # here rather than committed; `npm run check` then type-checks against it.
       - run: npm run types
-      - run: git diff --exit-code -- worker/worker-configuration.d.ts
       - run: npm run check
       - run: npm run check:tests
       - run: npm test

@@ -30,6 +30,7 @@ from entry_validation import (
     EntrySchemaUnevaluable,
     ENTRY_SCHEMA_EVALUATION_ERROR,
     ENTRY_SCHEMA_NAMES,
+    OPTIONAL_ENTRY_SCHEMA_VERSIONS,
     entry_schema_violations,
     load_entry_schemas,
 )
@@ -444,9 +445,12 @@ def _stage_schema(root: pathlib.Path, output: pathlib.Path) -> None:
     they were two, a record could satisfy the contract and fail what was served
     beside it.
     """
-    for schema_name in ENTRY_SCHEMA_NAMES.values():
+    for version, schema_name in ENTRY_SCHEMA_NAMES.items():
         schema = root / schema_name
         if schema.is_symlink() or not schema.is_file():
+            if version in OPTIONAL_ENTRY_SCHEMA_VERSIONS and not schema.exists() and not schema.is_symlink():
+                # Not published yet; a record declaring it fails below.
+                continue
             raise ValueError(f"{schema_name} is missing or symbolic")
         shutil.copy2(schema, output / schema_name)
 
@@ -469,7 +473,7 @@ def _check_against_schema(output: pathlib.Path, staged: list[dict[str, Any]]) ->
     validators, schema_errors = load_entry_schemas(output)
     if schema_errors:
         raise ValueError("; ".join(schema_errors))
-    if set(validators) != set(ENTRY_SCHEMA_NAMES):
+    if not set(validators) >= set(ENTRY_SCHEMA_NAMES) - OPTIONAL_ENTRY_SCHEMA_VERSIONS:
         raise ValueError("published entry schema set is incomplete")
     for version, validator in validators.items():
         validate_entry_schema_for_recent(validator.schema, ENTRY_SCHEMA_NAMES[version])

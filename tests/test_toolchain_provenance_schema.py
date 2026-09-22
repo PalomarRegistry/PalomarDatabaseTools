@@ -154,3 +154,16 @@ def test_the_v5_contract_may_be_added_after_launch_but_never_changed(repo):
     repo.git("add", "-A")
     deleted = repo.commit("delete the v5 contract")
     assert any("schema-v5.json" in error for error in check_append_only.check(repo.path, changed, deleted))
+
+
+def test_publication_proceeds_without_the_v5_contract_until_a_record_needs_it(repo, served):
+    (repo.path / "schema-v5.json").unlink()
+    identifier = repo.next_identifier()
+    repo.install_entry(repo.entry_data(identifier, 1))
+    repo.commit("a registry that has not published the v5 contract")
+    site = served.publish()
+    assert (site / "schema-v3.json").is_file() and not (site / "schema-v5.json").exists()
+    repo.install_entry(repo.toolchain_provenance(repo.entry_data(repo.next_identifier(), 1)))
+    repo.commit("a v5 record before its contract")
+    with pytest.raises(Exception, match="schema-v5.json|unsupported schema_version"):
+        served.publish()

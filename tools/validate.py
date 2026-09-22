@@ -219,6 +219,11 @@ def validate(
                 f"{name}: schema_version must be one of "
                 f"{', '.join(map(str, ENTRY_SCHEMA_NAMES))}"
             )
+        elif version not in validators and schema_evaluable:
+            errors.append(
+                f"{name}: {ENTRY_SCHEMA_NAMES[version]} is not published, so a "
+                f"schema {version} record cannot be validated"
+            )
         elif version in validators:
             if schema_evaluable:
                 try:

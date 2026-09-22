@@ -93,3 +93,64 @@ def test_every_report_contract_is_the_one_its_entry_schema_expects(repo, version
     wrong["schema_version"] = 1 if version == 5 else 2
     bundle.write_text(json.dumps(wrong, indent=2, sort_keys=True) + "\n")
     assert any("mechanical report schema" in error for error in _errors(repo))
+
+
+def test_a_database_without_the_v5_contract_still_validates_older_records(repo):
+    (repo.path / "schema-v5.json").unlink()
+    identifier = repo.next_identifier()
+    repo.install_entry(repo.entry_data(identifier, 1))
+    assert validate.validate(repo.path) == []
+
+
+def test_a_v5_record_needs_the_v5_contract_to_be_published(repo):
+    (repo.path / "schema-v5.json").unlink()
+    identifier = repo.next_identifier()
+    repo.install_entry(repo.toolchain_provenance(repo.entry_data(identifier, 1)))
+    errors = validate.validate(repo.path)
+    assert any("schema-v5.json is not published" in error for error in errors), errors
+
+
+def test_a_v5_record_validates_completely(repo):
+    identifier = repo.next_identifier()
+    repo.install_entry(repo.toolchain_provenance(repo.entry_data(identifier, 1)))
+    assert validate.validate(repo.path) == []
+
+
+@pytest.mark.parametrize("field", PROVENANCE)
+def test_every_provenance_field_is_bound_to_the_report(repo, field):
+    identifier = repo.next_identifier()
+    data = repo.toolchain_provenance(repo.entry_data(identifier, 1))
+    repo.install_entry(data)
+    stored = json.loads((repo.path / f"entries/{identifier}-v1.json").read_text())
+    changed = {
+        "toolchain_commit": "7" * 40,
+        "tool_digests": {**stored["verification"]["tool_digests"], "lake": "7" * 64},
+        "kernels": [{"name": "nanoda", "argv": ["/elsewhere/nanoda_bin"]}],
+        "protected_config_sha256": "7" * 64,
+        "bwrap_source_tag": "v0.13.0",
+    }[field]
+    stored["verification"][field] = changed
+    repo.write_json(f"entries/{identifier}-v1.json", stored)
+    assert any(field in error for error in validate.validate(repo.path))
+
+
+def test_the_v5_contract_may_be_added_after_launch_but_never_changed(repo):
+    import check_append_only
+
+    (repo.path / "schema-v5.json").unlink()
+    repo.git("add", "-A")
+    base = repo.commit("a launched database without the v5 contract")
+    (repo.path / "schema-v5.json").write_bytes((ROOT / "schema-v5.json").read_bytes())
+    repo.git("add", "-A")
+    added = repo.commit("publish the v5 contract")
+    assert check_append_only.check(repo.path, base, added) == []
+    schema = json.loads((repo.path / "schema-v5.json").read_text())
+    schema["title"] = "changed"
+    (repo.path / "schema-v5.json").write_text(json.dumps(schema, indent=2) + "\n")
+    repo.git("add", "-A")
+    changed = repo.commit("tamper with the v5 contract")
+    assert any("schema-v5.json" in error for error in check_append_only.check(repo.path, added, changed))
+    (repo.path / "schema-v5.json").unlink()
+    repo.git("add", "-A")
+    deleted = repo.commit("delete the v5 contract")
+    assert any("schema-v5.json" in error for error in check_append_only.check(repo.path, changed, deleted))

@@ -31,6 +31,10 @@ from schema_policy import (
 ENTRY_SCHEMA_VERSION = 3
 ENTRY_SCHEMA_NAME = "schema-v3.json"
 ENTRY_SCHEMA_NAMES = {3: "schema-v3.json", 4: "schema-v4.json", 5: "schema-v5.json"}
+# Contracts a database may not have published yet. The tooling has to be
+# pinned before the file can be added (the previous tooling rejects a schema
+# it does not know), so an absent one is not an error until a record needs it.
+OPTIONAL_ENTRY_SCHEMA_VERSIONS = frozenset({5})
 ENTRY_SCHEMA_EVALUATION_ERROR = "entry schema cannot be evaluated safely"
 PALOMAR_ID_RE = re.compile(
     r"PALOMAR-(?P<date>[0-9]{4}-[0-9]{2}-[0-9]{2})-(?P<serial>[0-9]{6})"
@@ -80,6 +84,8 @@ def load_entry_schemas(
     for version, schema_name in ENTRY_SCHEMA_NAMES.items():
         path = root / schema_name
         if path.is_symlink() or not path.is_file():
+            if version in OPTIONAL_ENTRY_SCHEMA_VERSIONS and not path.exists() and not path.is_symlink():
+                continue
             errors.append(f"{schema_name}: entry schema is missing or symbolic")
             continue
         try:

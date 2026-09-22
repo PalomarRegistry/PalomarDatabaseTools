@@ -18,6 +18,7 @@ from typing import Any
 import jsonschema
 from referencing import Registry
 
+from correction_validation import LEGACY_REREVIEWED_CORRECTIONS
 from entry_validation import PALOMAR_ID_RE
 from schema_policy import (
     InvalidSchemaJSON,
@@ -191,6 +192,30 @@ def validate_scores(
                     f"{name}:{field}: must match {entry_name}, so that the scores "
                     "belong to the review they explain"
                 )
+        correction = _mapping(entry.get("registry_correction"))
+        if correction and entry_name not in LEGACY_REREVIEWED_CORRECTIONS:
+            based_on = _mapping(correction.get("based_on"))
+            baseline_name = f"{entry.get('id')}-v{based_on.get('version')}.json"
+            baseline_path = scores_dir / baseline_name
+            try:
+                baseline_scores = json.loads(baseline_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                errors.append(
+                    f"{name}: cannot read the baseline scores required by the correction"
+                )
+            else:
+                inherited = {
+                    key: baseline_scores.get(key)
+                    for key in ("reviewed_at", "policy_commit", "scores")
+                } if isinstance(baseline_scores, dict) else None
+                projected = {
+                    key: data.get(key)
+                    for key in ("reviewed_at", "policy_commit", "scores")
+                }
+                if inherited != projected:
+                    errors.append(
+                        f"{name}: registry corrections must inherit the baseline scores exactly"
+                    )
 
     required = set(expected)
     for missing in sorted(required - present):

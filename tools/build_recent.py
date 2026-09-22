@@ -224,9 +224,16 @@ def _string(
     return value
 
 
-def _strings(value: object, where: str, *, pattern: re.Pattern[str] | None = None) -> list[str]:
-    if not isinstance(value, list) or not value:
-        raise ValueError(f"{RECENT_PATH}: {where} must be a non-empty array")
+def _strings(
+    value: object,
+    where: str,
+    *,
+    pattern: re.Pattern[str] | None = None,
+    nonempty: bool = True,
+) -> list[str]:
+    if not isinstance(value, list) or (nonempty and not value):
+        required = "a non-empty array" if nonempty else "an array"
+        raise ValueError(f"{RECENT_PATH}: {where} must be {required}")
     result: list[str] = []
     for position, item in enumerate(value):
         text = _string(item, f"{where}[{position}]")
@@ -298,7 +305,10 @@ def validate_recent(document: object) -> dict[str, Any]:
         )
         _strings(classification["arxiv"], f"{where}.classification.arxiv", pattern=ARXIV_RE)
         _strings(
-            classification["msc2020"], f"{where}.classification.msc2020", pattern=MSC_RE
+            classification["msc2020"],
+            f"{where}.classification.msc2020",
+            pattern=MSC_RE,
+            nonempty=False,
         )
         formalization = _exact(
             item["formalization"], {"theorem_names"}, f"{where}.formalization"

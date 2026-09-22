@@ -186,6 +186,56 @@ def test_the_projection_has_one_exact_checked_fixture():
     assert validate_recent(document) == expected
 
 
+@pytest.mark.parametrize("incremental", [False, True])
+def test_publication_accepts_an_entry_without_msc_codes(repo, served, incremental):
+    # Production entry schemas permit an empty MSC list; the older synthetic
+    # schema copies predate that widening. Match the deployed contract here.
+    for name in ("schema-v3.json", "schema-v4.json"):
+        schema = repo.read_json(name)
+        schema["properties"]["classification"]["properties"]["msc2020"]["minItems"] = 0
+        repo.write_json(name, schema)
+    repo.commit("allow optional MSC classification in the database schema")
+    if incremental:
+        served.publish()
+    entry = repo.entry_data("PALOMAR-2026-07-29-000002", 1)
+    entry["classification"]["msc2020"] = []
+    repo.install_entry(entry)
+    repo.commit("register an entry without optional MSC codes")
+
+    served.publish(by_plan=True, require_incremental=incremental)
+
+    document = validate_recent(_recent(served.path))
+    projected = next(item for item in document["entries"] if item["id"] == entry["id"])
+    assert projected["classification"] == entry["classification"]
+    assert (served.path / projected["path"]).read_bytes() == (
+        repo.path / projected["path"]
+    ).read_bytes()
+    assert (served.path / "recent.json").read_bytes() == (
+        served.rebuild() / "recent.json"
+    ).read_bytes()
+
+
+@pytest.mark.parametrize("codes", [None, "", "49Q15", {}, [""], ["invalid"], [7], ["49Q15", "49Q15"]])
+def test_the_projection_still_refuses_invalid_msc_codes(codes):
+    root = pathlib.Path(__file__).resolve().parents[1]
+    document = json.loads((root / "tests/fixtures/recent.json").read_text())
+    document["entries"][0]["classification"]["msc2020"] = codes
+
+    with pytest.raises(ValueError, match="classification.msc2020"):
+        validate_recent(document)
+
+
+@pytest.mark.parametrize("field", ["arxiv", "theorem_names"])
+def test_the_projection_still_requires_arxiv_and_theorem_names(field):
+    root = pathlib.Path(__file__).resolve().parents[1]
+    document = json.loads((root / "tests/fixtures/recent.json").read_text())
+    section = "classification" if field == "arxiv" else "formalization"
+    document["entries"][0][section][field] = []
+
+    with pytest.raises(ValueError, match=f"{field} must be a non-empty array"):
+        validate_recent(document)
+
+
 def test_the_render_projection_has_one_exact_checked_fixture():
     root = pathlib.Path(__file__).resolve().parents[1]
     entry = json.loads((root / "tests/fixtures/entry.json").read_text())

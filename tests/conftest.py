@@ -70,6 +70,7 @@ class Database:
         (path / "entries").mkdir(parents=True, exist_ok=True)
         shutil.copy(ROOT / "schema-v3.json", path / "schema-v3.json")
         shutil.copy(ROOT / "schema-v4.json", path / "schema-v4.json")
+        shutil.copy(ROOT / "schema-v5.json", path / "schema-v5.json")
         shutil.copy(
             ROOT / "tests" / "fixtures" / "synthetic-scores-schema.json",
             path / "scores-v1.json",
@@ -140,6 +141,30 @@ class Database:
         )
         return data
 
+    def toolchain_provenance(self, data: dict) -> dict:
+        """Rewrite a fixture record into the schema-5 shape (toolchain provenance)."""
+        data["schema_version"] = 5
+        verification = data["verification"]
+        for field in ("comparator_commit", "lean4export_commit", "landrun_commit", "nanoda_commit"):
+            verification.pop(field, None)
+        verification.update({
+            "toolchain_commit": "5" * 40,
+            "tool_digests": {
+                name: hashlib.sha256(name.encode()).hexdigest()
+                for name in ("lake", "lean", "leanexport", "leanchecker", "nanoda_bin", "con-ron", "bwrap")
+            },
+            "kernels": [
+                {"name": "nanoda", "argv": ["/toolchain/bin/nanoda_bin"]},
+                {"name": "con-ron", "argv": ["/toolchain/bin/con-ron"]},
+            ],
+            "protected_config_sha256": "6" * 64,
+            "bwrap_source_tag": "v0.12.0",
+        })
+        render = data["challenge_render"]
+        render.pop("landrun_commit", None)
+        render["bwrap_source_tag"] = "v0.12.0"
+        return data
+
     def add_entry(self, identifier: str, version: int, **overrides: object) -> pathlib.Path:
         data = self.entry_data(identifier, version, **overrides)
         return self.install_entry(data)
@@ -205,13 +230,17 @@ class Database:
             "solution": {"sha256": verification["solution_sha256"]},
             "checked_at": verification["verified_at"],
             "workflow_url": verification["workflow_url"],
-            "comparator_commit": verification["comparator_commit"],
-            "lean4export_commit": verification["lean4export_commit"],
-            "landrun_commit": verification["landrun_commit"],
-            "nanoda_commit": verification["nanoda_commit"],
         }
+        if data.get("schema_version") == 5:
+            report.update({field: verification[field] for field in (
+                "toolchain_commit", "tool_digests", "kernels", "protected_config_sha256", "bwrap_source_tag",
+            )})
+        else:
+            report.update({field: verification[field] for field in (
+                "comparator_commit", "lean4export_commit", "landrun_commit", "nanoda_commit",
+            )})
         report.update({
-            "schema_version": 1,
+            "schema_version": 2 if data.get("schema_version") == 5 else 1,
             "comparator": {"path": data["formalization"]["comparator_config_path"]},
             "formalization": {"path": data["formalization"]["formalization_metadata_path"]},
             "lakefile": {"path": data["formalization"]["lakefile_path"]},

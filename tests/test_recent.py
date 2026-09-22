@@ -190,7 +190,7 @@ def test_the_projection_has_one_exact_checked_fixture():
 def test_publication_accepts_an_entry_without_msc_codes(repo, served, incremental):
     # Production entry schemas permit an empty MSC list; the older synthetic
     # schema copies predate that widening. Match the deployed contract here.
-    for name in ("schema-v3.json", "schema-v4.json"):
+    for name in ("schema-v3.json", "schema-v4.json", "schema-v5.json"):
         schema = repo.read_json(name)
         schema["properties"]["classification"]["properties"]["msc2020"]["minItems"] = 0
         repo.write_json(name, schema)

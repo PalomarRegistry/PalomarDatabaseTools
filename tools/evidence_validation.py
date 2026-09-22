@@ -49,6 +49,32 @@ def _sha256(path: pathlib.Path) -> str:
     return digest.hexdigest()
 
 
+# Which mechanical report contract a record of each entry schema cites. Schema-1
+# reports carry the four separately built tool commits; schema-2 reports carry
+# the Lean toolchain commit and the digests of the tools it bundles.
+REPORT_SCHEMA_FOR_ENTRY = {3: 1, 4: 1, 5: 2}
+TOOLCHAIN_PROVENANCE_FIELDS = (
+    "toolchain_commit",
+    "tool_digests",
+    "kernels",
+    "protected_config_sha256",
+    "bwrap_source_tag",
+)
+TOOL_COMMIT_FIELDS = ("comparator_commit", "lean4export_commit", "landrun_commit", "nanoda_commit")
+
+
+def provenance_bindings(
+    entry: dict, report: dict, verification: dict
+) -> tuple[tuple[object, object, str], ...]:
+    """The tool-provenance fields the record must copy from its report, by schema."""
+    fields = (
+        TOOLCHAIN_PROVENANCE_FIELDS
+        if REPORT_SCHEMA_FOR_ENTRY.get(entry.get("schema_version")) == 2
+        else TOOL_COMMIT_FIELDS
+    )
+    return tuple((report.get(field), verification.get(field), field) for field in fields)
+
+
 def _mapping(value: object) -> Mapping[str, Any]:
     """Return a JSON object as a mapping, or an empty mapping otherwise."""
     return value if isinstance(value, dict) else {}
@@ -188,10 +214,7 @@ def validate_evidence(
                     (report.get("stage"), "complete", "stage"),
                     (report.get("workflow_url"), verification.get("workflow_url"), "workflow_url"),
                     (report.get("checked_at"), verification.get("verified_at"), "checked_at"),
-                    (report.get("comparator_commit"), verification.get("comparator_commit"), "comparator_commit"),
-                    (report.get("lean4export_commit"), verification.get("lean4export_commit"), "lean4export_commit"),
-                    (report.get("landrun_commit"), verification.get("landrun_commit"), "landrun_commit"),
-                    (report.get("nanoda_commit"), verification.get("nanoda_commit"), "nanoda_commit"),
+                    *provenance_bindings(entry, report, verification),
                     (source.get("repository"), _mapping(entry.get("source")).get("repository"), "source.repository"),
                     (source.get("commit"), _mapping(entry.get("source")).get("commit"), "source.commit"),
                     (challenge.get("sha256"), verification.get("challenge_sha256"), "challenge.sha256"),
@@ -203,9 +226,11 @@ def validate_evidence(
                 entry_source = _mapping(entry.get("source"))
                 formalization = _mapping(entry.get("formalization"))
                 report_version = report.get("schema_version")
-                if report_version != 1:
+                expected_report_version = REPORT_SCHEMA_FOR_ENTRY.get(entry.get("schema_version"))
+                if report_version != expected_report_version:
                     errors.append(
-                        f"{name}:verification requires mechanical report schema 1"
+                        f"{name}:verification requires mechanical report schema "
+                        f"{expected_report_version}"
                     )
                 else:
                     report_paths = {

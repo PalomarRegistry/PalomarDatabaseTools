@@ -30,7 +30,7 @@ from schema_policy import (
 
 ENTRY_SCHEMA_VERSION = 3
 ENTRY_SCHEMA_NAME = "schema-v3.json"
-ENTRY_SCHEMA_NAMES = {3: "schema-v3.json", 4: "schema-v4.json"}
+ENTRY_SCHEMA_NAMES = {3: "schema-v3.json", 4: "schema-v4.json", 5: "schema-v5.json"}
 ENTRY_SCHEMA_EVALUATION_ERROR = "entry schema cannot be evaluated safely"
 PALOMAR_ID_RE = re.compile(
     r"PALOMAR-(?P<date>[0-9]{4}-[0-9]{2}-[0-9]{2})-(?P<serial>[0-9]{6})"
@@ -126,7 +126,8 @@ def load_entry_schema(
     """
     validators, errors = load_entry_schemas(root)
     compatibility_errors = [
-        error for error in errors if not error.startswith("schema-v4.json:")
+        error for error in errors
+        if not error.startswith(("schema-v4.json:", "schema-v5.json:"))
     ]
     normalized: list[str] = []
     for error in compatibility_errors:

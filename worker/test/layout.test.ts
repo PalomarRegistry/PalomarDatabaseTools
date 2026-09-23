@@ -95,6 +95,9 @@ describe("serving", () => {
     bucket.put(`snapshots/${release}/schema-v2.json`, '{"title":"obsolete"}\n');
 
     expect((await worker.fetch(request("/schema-v3.json"), env(bucket))).status).toBe(200);
+    bucket.put(`snapshots/${release}/schema-v5.json`, '{"title":"toolchain provenance"}\n');
+    expect((await worker.fetch(request("/schema-v5.json"), env(bucket))).status).toBe(200);
+    expect((await worker.fetch(request("/schema-v4.json"), env(bucket))).status).toBe(404);
     const readsAfterCurrent = [...bucket.reads];
     expect((await worker.fetch(request("/schema-v2.json"), env(bucket))).status).toBe(404);
     expect(bucket.reads).toEqual(readsAfterCurrent);

@@ -17,6 +17,8 @@ and 20 distinct normalized words, including dropped words. Cursors are at most
 means the registry changed: restart at the first page with the same filters.
 Responses are `no-store`, CORS `*`, with exact registry-wide result/project
 counts but no filtered total. Following `next` or `previous` costs one request.
+Worker observability redacts URL query strings; application error logs contain
+only an event and error type, never the search text.
 
 The response includes `schema_version: 1`, `revision`, `release`, `totals`,
 `entries`, `next`, `previous`, `dropped`, and `message`. Entries project the
@@ -81,7 +83,8 @@ through public `?id=...`, without any write credential.
 4. Deploy Web and its machine documentation, then enable Database publication
    using the query-aware wheel/workflow. Confirm that listing/search requests use
    only the bounded API, including hover previews, and reach older entries.
-5. Set `PALOMAR_RETIRE_STATIC_SEARCH=true` on the production Worker. The old
+5. Set `PALOMAR_RETIRE_STATIC_SEARCH` to `"true"` in the production `vars`
+   in `worker/wrangler.jsonc` and deploy that configuration. The old
    `/search/t/...` and `/search/stopwords.json` URLs now return 410 with the
    replacement API path. The next full publication deletes their old R2 keys.
    No compatibility search engine or old posting builder is retained. Web keeps

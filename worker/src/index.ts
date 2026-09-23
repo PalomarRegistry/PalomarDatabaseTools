@@ -1,3 +1,6 @@
+import { QueryError, json as queryJson, queryResults } from "./registry-query";
+import { updateQuery } from "./registry-write";
+
 const POINTER_KEY = "_current.json";
 const POINTER_LIMIT = 1024;
 const AVAILABILITY_KEY = "public/source-availability.json";
@@ -583,6 +586,29 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const started = Date.now();
     const url = new URL(request.url);
+    if (url.pathname === "/api/v1/results" || url.pathname === "/_operations/results") {
+      try {
+        if (!env.QUERY) return queryJson({ error: "index_unavailable", message: "Registry search is temporarily unavailable" }, 503);
+        if (url.pathname === "/_operations/results") {
+          if (request.method !== "PUT" || url.search) return response(405, "Method not allowed\n");
+          if (!env.PALOMAR_QUERY_UPDATE_TOKEN || !await authenticated(request, env.PALOMAR_QUERY_UPDATE_TOKEN)) return response(401, "Unauthorized\n");
+          return await updateQuery(request, env.QUERY);
+        }
+        if (!["GET", "HEAD"].includes(request.method)) return response(405, "Method not allowed\n");
+        const result = await queryResults(request, env.QUERY);
+        return request.method === "HEAD" ? new Response(null, result) : result;
+      } catch (error) {
+        if (error instanceof QueryError) return queryJson({ error: error.code, message: error.message }, error.status);
+        console.error(JSON.stringify({ event: "registry_query_failed", error: error instanceof Error ? error.name : "unknown" }));
+        return queryJson({ error: "index_unavailable", message: "Registry search is temporarily unavailable" }, 503);
+      }
+    }
+    // Enabled only after the replacement browser and its machine documentation
+    // are deployed. No R2 read and no compatibility search engine.
+    if (env.PALOMAR_RETIRE_STATIC_SEARCH === "true" &&
+        (/^\/search\/t\/[a-z0-9]{2,32}\/(?:head|[0-9]{1,4})\.json$/.test(url.pathname) || url.pathname === "/search/stopwords.json")) {
+      return queryJson({ error: "search_retired", replacement: "/api/v1/results" }, 410);
+    }
     if (url.pathname === AVAILABILITY_OPERATION && request.method === "PUT") {
       try {
         return await updateAvailability(request, env);

@@ -24,7 +24,7 @@ from build_recent import (
     build_recent,
     validate_entry_schema_for_recent,
 )
-from build_search import build_search, head_paths, page_paths, patch_search
+from query_projection import QUERY_PATH, write_query, write_full_query
 from build_subjects import build_subjects
 from entry_validation import (
     EntrySchemaUnevaluable,
@@ -38,7 +38,7 @@ from takedowns import committed_manifest_blob, load_takedowns, manifest_blob
 
 IMMUTABLE_PREFIXES = ("entries/", "renders/", "evidence/")
 STABLE_PATHS = ("feed.xml", RECENT_PATH, RECENT_RENDERS_PATH)
-UNKEYED = ("index.json", "release-delta.json")
+UNKEYED = ("index.json", "release-delta.json", QUERY_PATH)
 FULL_REBUILD_INPUTS = frozenset(
     {
         "LICENSE",
@@ -623,7 +623,6 @@ class Plan:
         """
         wanted = set(patch_surfaces.prior_paths(self.touched))
         wanted |= {f"versions/{item.id}.json" for item in self.touched}
-        wanted |= set(head_paths(self.staging))
         for _identifier, identity in self.registrations:
             wanted.add(
                 build_registration_lookups.repository_path(
@@ -632,7 +631,6 @@ class Plan:
             )
             wanted.add(build_registration_lookups.identity_path(identity))
         if prior is not None:
-            wanted |= set(page_paths(prior, self.staging, []))
             wanted -= {relative for relative in wanted if (prior / relative).is_file()}
         return sorted(wanted)
 
@@ -976,12 +974,9 @@ def _stage_incremental(
         output, prior, ready.touched, parent_records=int(previous["records"]["count"])
     )
     build_feeds(output, codes)
-    # One append-only postings sequence per word, and the only thing this file
-    # has to know about searching. It appends to the open page of each word the
-    # release adds and scans the sequences of each word it withdraws, so a
-    # publication writes two objects per word of the record it adds however
-    # many results the registry holds. See tools/build_search.py.
-    retired = patch_search(output, prior, ready.staging, [])
+    # Stream only affected current records to the derived query index.
+    write_query(output, ((item.current[1], len(item.active)) for item in ready.touched if item.current is not None))
+    retired = []
     return _delta(
         output,
         root,
@@ -1090,10 +1085,8 @@ def _stage_full(
     # is what removes the second whole-registry pass a publication used to
     # make after this one.
     build_feeds(output)
-    # Stated outright from every record being served, which is what a rebuild
-    # is for: a word whose last result was withdrawn is absent here rather than
-    # left with a head saying it has none.
-    build_search(output, list(zip(active_summaries, active_entries)))
+    # Rebuild the derived index from the complete current active set.
+    write_full_query(output, active_entries)
     return _delta(
         output,
         root,

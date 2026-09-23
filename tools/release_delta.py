@@ -51,11 +51,12 @@ BASE_SCHEMA = 1
 # registered; 3 makes the landing projection self-contained; 4 adds the
 # bounded repository and exact registration-identity lookups used by intake;
 # 5 adds the bounded active source-commit set to each exact identity lookup;
-# 6 labels the registered-status version-index contract as schema version 2.
+# 6 labels the registered-status version-index contract as schema version 2;
+# 7 replaces static postings with private input for the derived D1 query index.
 # Unchanged rows cannot be upgraded by an incremental release, because that
 # release has only the records it touched, so the first release in any new
 # layout rebuilds it.
-SURFACES = 6
+SURFACES = 7
 MODULUS = 1 << 256
 
 

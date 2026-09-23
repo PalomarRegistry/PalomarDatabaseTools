@@ -1705,3 +1705,35 @@ def test_a_page_is_written_before_the_documents_that_name_it():
         "browse/index.json",
         "subjects/msc/11A05.json",
     ]
+
+
+def test_query_activation_precedes_withdrawal_and_retries_after_failure(tmp_path, monkeypatch):
+    import publish_query
+    client = MemoryR2()
+    first, second = _identifier(1), _identifier(2)
+    publish_snapshot(client, "bucket", build_site(tmp_path, "one", [first, second]))
+    site = build_site(tmp_path, "two", [first, second], taken_down=[second])
+    events = []
+    fail = True
+    class Query:
+        def __init__(self, *args):
+            pass
+        def upload(self, staged):
+            assert staged == site
+            assert f"public/entries/{first}.json" in client.objects
+            events.append("upload")
+        def finish(self):
+            assert f"public/entries/{second}.json" in client.objects
+            events.append("finish")
+            if fail:
+                raise RuntimeError("query activation failed")
+        def collect(self):
+            assert f"public/entries/{second}.json" not in client.objects
+            events.append("collect")
+    monkeypatch.setattr(publish_query, "QueryPublisher", Query)
+    with pytest.raises(RuntimeError, match="query activation failed"):
+        publish_snapshot(client, "bucket", site, query_api="https://data.example.test")
+    assert f"public/entries/{second}.json" in client.objects
+    fail = False
+    publish_snapshot(client, "bucket", site, query_api="https://data.example.test")
+    assert events == ["upload", "finish", "upload", "finish", "collect"]

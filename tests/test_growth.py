@@ -63,14 +63,6 @@ def _cost(repo, tmp_path, monkeypatch, size, day="2026-07-29"):
     ):
         monkeypatch.setattr(f"{module}.{name}", 3)
     monkeypatch.setattr("build_registration_lookups.REPOSITORY_LIMIT", 3)
-    # Forty, so that both registries put the record being added at the same
-    # offset in its word's open postings page and at a page number of the same
-    # width. The open page is what a publication rewrites, so at the default
-    # size the two runs would be comparing a page of twelve postings against a
-    # page of ninety-two, which is a bound not yet reached rather than a cost
-    # that grows. See tests/test_search.py for the same measurement made where
-    # the sizes were chosen for it.
-    monkeypatch.setattr("build_search.PAGE_SIZE", 40)
     served = tmp_path / f"served{size}"
     served.mkdir()
     # Grow the registry on another contiguous day, while keeping the touched
@@ -149,9 +141,8 @@ def test_the_delta_does_not_carry_a_row_per_published_object(repo, tmp_path, mon
     # rest of the delta is the record itself, its render and its evidence,
     # which is the work.
     assert small["delta rows for pages"] - small["delta rows for postings"] == 17, small
-    # Two per distinct word the fixture record carries, plus the fixed stopword
-    # document that is deliberately staged and rewritten on every release.
-    assert small["delta rows for postings"] == 2 * 34 + 1, small
+    # Query input is private staging input; no static postings are published.
+    assert small["delta rows for postings"] == 0, small
 
 
 def test_a_full_rebuild_is_the_one_place_the_cost_is_the_registry(repo, tmp_path):

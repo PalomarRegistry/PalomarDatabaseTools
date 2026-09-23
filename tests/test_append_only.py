@@ -512,6 +512,58 @@ def test_a_hash_bound_orcid_evidence_widening_is_permitted(repo):
     assert violations(repo) == []
 
 
+def widen_render_sandbox(repo, *, manifest: dict | None = None, paths=("schema-v3.json", "schema-v4.json")) -> dict:
+    """Change every published entry schema the same way, bound by one manifest.
+
+    The checker compares digests, not meaning, so the change here only has to
+    be a change; what it widens is the verifier's business.
+    """
+    import hashlib
+
+    changes = []
+    for relative in paths:
+        old = (repo.path / relative).read_bytes()
+        schema = repo.read_json(relative)
+        schema["properties"]["challenge_render"]["description"] = "rendered under bubblewrap"
+        repo.write_json(relative, schema)
+        new = (repo.path / relative).read_bytes()
+        changes.append({
+            "path": relative,
+            "old_sha256": hashlib.sha256(old).hexdigest(),
+            "new_sha256": hashlib.sha256(new).hexdigest(),
+            "widened": ["properties/challenge_render/description"],
+        })
+    manifest = manifest or {
+        "schema_version": 1,
+        "migration": "render-sandbox-v1",
+        "schema_changes": changes,
+    }
+    repo.write_json("migrations/render-sandbox-v1.json", manifest)
+    return manifest
+
+
+def test_one_manifest_may_bind_the_same_widening_of_every_published_schema(repo):
+    widen_render_sandbox(repo)
+    assert violations(repo) == []
+
+
+def test_a_manifest_binding_one_schema_does_not_authorize_the_other(repo):
+    manifest = widen_render_sandbox(repo)
+    manifest["schema_changes"] = manifest["schema_changes"][:1]
+    repo.write_json("migrations/render-sandbox-v1.json", manifest)
+    errors = violations(repo)
+    assert any("schema-v4.json" in error and "frozen" in error for error in errors)
+    assert not any("schema-v3.json" in error for error in errors)
+
+
+def test_a_correction_schema_change_without_a_manifest_remains_forbidden(repo):
+    schema = repo.read_json("schema-v4.json")
+    schema["properties"]["challenge_render"]["description"] = "rendered under bubblewrap"
+    repo.write_json("schema-v4.json", schema)
+    errors = violations(repo)
+    assert any("schema-v4.json" in error and "frozen" in error for error in errors)
+
+
 def test_two_manifests_cannot_authorize_one_schema_transition(repo):
     widen(repo)
     manifest = repo.read_json("migrations/classification-cardinality-v1.json")

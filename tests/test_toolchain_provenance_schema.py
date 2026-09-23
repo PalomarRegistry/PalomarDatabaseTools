@@ -31,12 +31,12 @@ def test_v5_is_v4_with_toolchain_provenance_and_nothing_else():
     for field in PROVENANCE:
         verification["properties"][field] = actual["properties"]["verification"]["properties"][field]
     verification["required"] = sorted({*verification["required"], *PROVENANCE})
+    # v4's render carries either sandbox field (a legacy record rendered after
+    # landrun was retired); v5's carries the bubblewrap tag and nothing else.
     render = expected["properties"]["challenge_render"]
     render["properties"].pop("landrun_commit")
-    render["required"].remove("landrun_commit")
-    render["properties"]["bwrap_source_tag"] = {"$ref": "#/$defs/release_tag"}
+    render.pop("oneOf")
     render["required"].append("bwrap_source_tag")
-    expected["$defs"]["release_tag"] = actual["$defs"]["release_tag"]
     assert actual == expected
     assert actual["properties"]["verification"]["properties"]["toolchain_commit"] == {"$ref": "#/$defs/sha"}
     digests = actual["properties"]["verification"]["properties"]["tool_digests"]
@@ -167,3 +167,38 @@ def test_publication_proceeds_without_the_v5_contract_until_a_record_needs_it(re
     repo.commit("a v5 record before its contract")
     with pytest.raises(Exception, match="schema-v5.json|unsupported schema_version"):
         served.publish()
+
+
+@pytest.mark.parametrize("version", [3, 4])
+def test_a_legacy_record_may_carry_the_renderers_bubblewrap_tag(repo, version):
+    """A record verified by the standalone comparator but rendered after landrun
+    was retired names the renderer's bubblewrap release instead of a landrun
+    commit; exactly one of the two is present."""
+    schema = _schema(version)
+    render = schema["properties"]["challenge_render"]
+    assert "landrun_commit" not in render["required"]
+    assert render["properties"]["bwrap_source_tag"] == {"$ref": "#/$defs/release_tag"}
+    assert render["oneOf"] == [{"required": ["landrun_commit"]}, {"required": ["bwrap_source_tag"]}]
+    assert schema["$defs"]["release_tag"] == _schema(5)["$defs"]["release_tag"]
+
+    identifier = repo.next_identifier()
+    data = repo.entry_data(identifier, 1)
+    assert data["schema_version"] == 3
+    data["challenge_render"].pop("landrun_commit")
+    data["challenge_render"]["bwrap_source_tag"] = "v0.12.0"
+    repo.install_entry(data)
+    assert _errors(repo) == []
+
+    def refused(record: dict) -> bool:
+        repo.write_json(f"entries/{identifier}-v1.json", record)
+        return any("challenge_render" in error for error in validate.validate(repo.path))
+
+    both = copy.deepcopy(data)
+    both["challenge_render"]["landrun_commit"] = "8" * 40
+    assert refused(both), "both sandbox fields must be refused"
+    neither = copy.deepcopy(data)
+    neither["challenge_render"].pop("bwrap_source_tag")
+    assert refused(neither), "a render with no sandbox field must be refused"
+    malformed = copy.deepcopy(data)
+    malformed["challenge_render"]["bwrap_source_tag"] = "0.12.0"
+    assert refused(malformed), "the tag must be a release tag"

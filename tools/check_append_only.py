@@ -113,6 +113,9 @@ LAUNCH_MARKER = ".palomar-launched"
 SCHEMA_WIDENING_MANIFESTS = (
     "migrations/classification-cardinality-v1.json",
     "migrations/orcid-record-check-v1.json",
+    # Binds the same widening of schema-v3.json and schema-v4.json at once: a
+    # render made after landrun was retired names bubblewrap instead.
+    "migrations/render-sandbox-v1.json",
 )
 
 # A published file must be an ordinary, non-executable file. A symlink freezes
@@ -174,7 +177,7 @@ def _listed(repo: pathlib.Path, rev: str, path: str) -> tuple[str, str] | None:
 
 
 def _widening_manifested(
-    repo: pathlib.Path, base: str, head: str, old_oid: str, new_oid: str
+    repo: pathlib.Path, base: str, head: str, path: str, old_oid: str, new_oid: str
 ) -> bool:
     """Whether `head` introduces a manifest binding exactly this schema change.
 
@@ -192,6 +195,10 @@ def _widening_manifested(
     can never be removed, so the exception can be armed exactly once. Without
     that, deleting the manifest and reintroducing it beside a second schema edit
     would pass both checks.
+
+    A manifest binds one file under `schema_change`, or several published
+    contracts that widen the same way under `schema_changes`; each entry is
+    judged for its own path by the same digest comparison.
     """
     digests = {
         side: hashlib.sha256(_git_object(repo, oid)).hexdigest()
@@ -208,13 +215,19 @@ def _widening_manifested(
             manifest = json.loads(_git_object(repo, listed[1]))
         except ValueError:
             continue
-        change = manifest.get("schema_change") if isinstance(manifest, dict) else None
-        if (
-            isinstance(change, dict)
-            and change.get("path") == ENTRY_SCHEMA_NAME
-            and all(change.get(side) == digest for side, digest in digests.items())
-        ):
-            matches += 1
+        if not isinstance(manifest, dict):
+            continue
+        changes = manifest.get("schema_changes")
+        if not isinstance(changes, list):
+            changes = [manifest.get("schema_change")]
+        for change in changes:
+            if (
+                isinstance(change, dict)
+                and change.get("path") == path
+                and path in ENTRY_SCHEMA_NAMES
+                and all(change.get(side) == digest for side, digest in digests.items())
+            ):
+                matches += 1
     return matches == 1
 
 
@@ -306,7 +319,7 @@ def check(repo: pathlib.Path, base: str, head: str) -> list[str]:
                 errors.append(f"{path}: added after launch, but the published entry schema is frozen")
             elif old_mode != new_mode:
                 errors.append(f"{path}: the file mode of the published entry schema may not change")
-            elif not _widening_manifested(repo, base, head, old_oid, new_oid):
+            elif not _widening_manifested(repo, base, head, path, old_oid, new_oid):
                 errors.append(
                     f"{path}: modified, but it is the sole published entry schema and is "
                     "frozen except by a manifested widening"

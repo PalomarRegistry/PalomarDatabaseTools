@@ -7,6 +7,9 @@ Public, data-independent tooling for the [Palomar Registry](https://palomar-regi
 - the Cloudflare Worker serving `data.palomar-registry.org`; and
 - the bounded source-availability monitor.
 
+The registry listing/search API and its producer-first rollout are documented
+in [docs/registry-query.md](docs/registry-query.md).
+
 This repository contains no Palomar review scores, takedown records or reasons,
 private moderation issues, unpublished registration state, or production
 credentials. The boundary and its rationale are documented in

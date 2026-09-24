@@ -1,5 +1,6 @@
 import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
 import { defineConfig } from "vitest/config";
+import { readFileSync } from "node:fs";
 
 /** Refuse any subrequest the runtime suite did not deliberately provide. */
 function rejectOutbound(request: Request): Response {
@@ -24,6 +25,9 @@ export default defineConfig({
       // local bucket into cleanup against the production bucket.
       remoteBindings: false,
       miniflare: {
+        bindings: {
+          QUERY_MIGRATIONS: JSON.stringify(readFileSync("migrations/0001_registry_query.sql", "utf8").split(/(?<=;)\s*(?=CREATE)/)),
+        },
         outboundService: rejectOutbound,
       },
     }),

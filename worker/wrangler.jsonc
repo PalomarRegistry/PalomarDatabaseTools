@@ -22,8 +22,10 @@
       "bucket_name": "palomar-public-data-staging"
     }
   ],
+  "d1_databases": [{"binding": "QUERY", "database_name": "palomar-query-staging", "database_id": "d780856d-d6bd-4997-99d1-7256739038bb", "migrations_dir": "migrations"}],
   "observability": {
     "enabled": true,
+    "redact_query_string": true,
     "head_sampling_rate": 1
   },
   "env": {
@@ -38,6 +40,7 @@
           "custom_domain": true
         }
       ],
+      "d1_databases": [{"binding": "QUERY", "database_name": "palomar-query", "database_id": "008a2325-2c8d-4971-9be5-660f8317d187", "migrations_dir": "migrations"}],
       "r2_buckets": [
         {
           "binding": "DATA",

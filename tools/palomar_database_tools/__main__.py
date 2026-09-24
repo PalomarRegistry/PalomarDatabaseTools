@@ -15,6 +15,7 @@ COMMANDS = frozenset(
         "public-source-availability",
         "publish-availability-targets",
         "publish-snapshot",
+        "publish-query",
         "release-delta",
         "smoke-source-availability",
         "source-availability-targets",

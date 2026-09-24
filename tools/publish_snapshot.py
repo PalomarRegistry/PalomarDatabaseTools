@@ -808,10 +808,15 @@ def publish_snapshot(
     site: pathlib.Path,
     database: pathlib.Path | None = None,
     record_replacements: pathlib.Path | None = None,
+    query_api: str | None = None,
 ) -> str:
     launched = _launched(database) if database is not None else True
     _assert_conditional_writes(client, bucket)
     release, delta, staged = _staged_objects(site.resolve())
+    query = None
+    if query_api is not None:
+        from publish_query import QueryPublisher
+        query = QueryPublisher(query_api, os.environ.get("PALOMAR_QUERY_UPDATE_TOKEN", ""), release, delta["parent"] is None)
     pointer = _read_pointer(client, bucket)
     previous = pointer[0] if pointer else None
 
@@ -934,6 +939,11 @@ def publish_snapshot(
         # there is what this release says should be.
         _verify(client, bucket, key, data, digest)
 
+    # New records are now readable. Full uploads remain invisible until finish;
+    # ordinary uploads expose one complete, retry-safe result at a time.
+    if query is not None:
+        query.upload(site)
+
     for relative, digest in rewrite:
         data = _staged_bytes(site, relative, digest)
         key = f"{PUBLIC_PREFIX}{relative}"
@@ -975,11 +985,17 @@ def publish_snapshot(
             raise RuntimeError(
                 f"record replacement origin does not match its manifest: {relative}"
             )
+        if query is not None:
+            query.remove(relative.removeprefix("entries/").split("-v")[0])
         _put_object(client, bucket, key, data, digest, relative)
         _verify(client, bucket, key, data, digest)
 
     # Before the flip, so that a crash here leaves a record already gone rather
     # than an index that says it is gone while it is still being served.
+    # Activate the complete current set before withdrawing any canonical bytes.
+    # There is no global query-disable mode or cross-store read-time dependency.
+    if query is not None:
+        query.finish()
     if doomed:
         _delete_keys(client, bucket, doomed)
 
@@ -996,6 +1012,8 @@ def publish_snapshot(
     current = _read_pointer(client, bucket)
     if current is None or current != (release, POINTER_SCHEMA, base_digest):
         raise RuntimeError("R2 pointer verification failed")
+    if query is not None:
+        query.collect()
 
     if previous == release:
         # A retry of a publication that already flipped. The pointer cannot say
@@ -1161,6 +1179,7 @@ def main() -> int:
         "that the next staging run can describe itself as a difference from it",
     )
     parser.add_argument("--bucket", default=os.environ.get("R2_BUCKET", BUCKET_DEFAULT))
+    parser.add_argument("--query-api", help="also update the query index through this HTTPS origin")
     args = parser.parse_args()
     reading_only = (
         args.audit or args.write_current_base is not None or args.fetch_prior is not None
@@ -1244,6 +1263,14 @@ def main() -> int:
             if args.audit
             else reconcile(client, args.bucket, args.site.resolve())
         )
+        if args.reconcile and args.query_api:
+            from publish_query import QueryPublisher
+            pointer = _read_pointer(client, args.bucket)
+            if pointer is None:
+                problems.append("query reconciliation has no published release to compare")
+            else:
+                query = QueryPublisher(args.query_api, os.environ.get("PALOMAR_QUERY_UPDATE_TOKEN", ""), pointer[0], True)
+                problems.extend(query.reconcile(args.site.resolve()))
         for line in problems:
             print(line)
         print(f"audit found {len(problems)} problem(s)")
@@ -1254,6 +1281,7 @@ def main() -> int:
         args.site,
         args.database,
         args.record_replacements,
+        args.query_api,
     )
     print(f"published release {release}")
     return 0

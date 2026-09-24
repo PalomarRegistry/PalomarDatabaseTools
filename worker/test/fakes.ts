@@ -126,6 +126,8 @@ export class FakeBucket {
 export function env(bucket: FakeBucket): Env {
   return {
     DATA: bucket as unknown as R2Bucket,
+    QUERY: undefined as unknown as D1Database,
+    PALOMAR_QUERY_UPDATE_TOKEN: "",
     PALOMAR_AVAILABILITY_UPDATE_TOKEN: "t".repeat(32),
   };
 }

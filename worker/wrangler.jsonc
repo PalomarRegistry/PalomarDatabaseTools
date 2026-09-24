@@ -31,6 +31,7 @@
   "env": {
     "production": {
       "name": "palomar-data",
+      "vars": {"PALOMAR_RETIRE_STATIC_SEARCH": "true"},
       // The production bucket is reachable only through this custom domain.
       "workers_dev": false,
       "preview_urls": false,

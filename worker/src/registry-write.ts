@@ -83,7 +83,7 @@ export async function updateQuery(request: Request, db: D1Database): Promise<Res
     try { summary = JSON.parse(String(r.summary)); } catch { return invalid("Invalid summary JSON"); }
     requireValue(summary && summary.id === identifier && summary.published_at === r.published_at && summary.trust?.level === r.trust, "Summary identity does not match index row");
     const classification = r.classification as { arxiv: string[]; msc2020: string[] };
-    requireValue(classification && Array.isArray(classification.arxiv) && classification.arxiv.length <= 2 && Array.isArray(classification.msc2020) && classification.msc2020.length <= 8, "Invalid classifications");
+    requireValue(classification && Array.isArray(classification.arxiv) && classification.arxiv.length <= 8 && Array.isArray(classification.msc2020) && classification.msc2020.length <= 8, "Invalid classifications");
     const codes = [...classification.arxiv.map(code => ["arxiv", code]), ...classification.msc2020.map(code => ["msc", code])];
     requireValue(codes.every(([kind, code]) => typeof code === "string" && (kind === "msc" ? /^\d{2}[A-Z-]\d{2}$/.test(code) : code.length <= 32 && /^[a-z]+(?:-[a-z]+)*(?:\.[A-Za-z-]+)?$/.test(code))), "Invalid classification code");
     const statements = [

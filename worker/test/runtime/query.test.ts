@@ -17,7 +17,7 @@ async function record(n: number, chunks = ["finite group", "elliot theorem"], re
   const fingerprint = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify({ n, chunks, date, repository }))))].map(byte => byte.toString(16).padStart(2, "0")).join("");
   const r = { id: id(n), published_at: date, trust: n % 2 ? "high" : "qualified",
     repository, fingerprint,
-    classification: { arxiv: ["math.CO"], msc2020: ["05C10"] },
+    classification: { arxiv: ["math.CO", "math.PR", "math.AP", "math.AG", "math.NT"], msc2020: ["05C10"] },
     summary: JSON.stringify({ id: id(n), published_at: date, trust: { level: n % 2 ? "high" : "qualified" }, title: "Test" }),
   };
   await operation({ op: "record", record: r }, rel, full);
@@ -53,6 +53,7 @@ describe("registry query in the actual D1 runtime", () => {
     expect(new Set([...first.entries, ...second.entries].map((r: { id: string }) => r.id)).size).toBe(31);
     expect((await query({ cursor: second.previous })).entries).toEqual(first.entries);
     expect((await query({ q: "finite elliot", trust: "high", msc: "05", from: "2026-08-01", to: "2026-08-31" })).entries).toHaveLength(16);
+    expect((await query({ arxiv: "math.NT" })).entries).toHaveLength(25);
     expect((await query({ q: "missing" })).entries).toEqual([]);
     expect((await query({ id: id(1) })).entries.map((r: { id: string }) => r.id)).toEqual([id(1)]);
     expect((await query({ q: "the" })).message).toContain("searchable");

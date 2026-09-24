@@ -65,8 +65,9 @@ through public `?id=...`, without any write credential.
 
 1. `worker/wrangler.jsonc` binds the provisioned `palomar-query-staging` and
    `palomar-query` databases. Their initial schema is applied. The deployment
-   workflow applies pending migrations before deploying both Worker environments;
-   its Actions token needs D1 write access. The staging Worker remains inert and
+   operator applies pending migrations to both D1 environments before merging
+   a Worker change. The Actions token deploys Workers but cannot access D1.
+   The staging Worker remains inert and
    its database empty apart from its schema. Deploy the Worker before Web.
 2. Set a fresh token of at least 32 characters as Worker secret
    `PALOMAR_QUERY_UPDATE_TOKEN` and the same Database Actions secret. Do not

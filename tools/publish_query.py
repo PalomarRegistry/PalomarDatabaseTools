@@ -41,6 +41,7 @@ class QueryPublisher:
             raise ValueError("query operation exceeds 256 KiB")
         request = urllib.request.Request(self.url, data=raw, method="PUT", headers={
             "Authorization": f"Bearer {self.token}", "Content-Type": "application/json",
+            "User-Agent": "Palomar-registry-query-publisher",
         })
         for attempt in range(3):
             try:

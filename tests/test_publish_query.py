@@ -23,6 +23,7 @@ def test_retries_the_exact_operation_without_exposing_credentials(monkeypatch):
     monkeypatch.setattr("time.sleep", lambda _: None)
     assert publisher().send({"op": "finish", "results": 0}) == {"ok": True}
     assert len({request.data for request in requests}) == 1
+    assert all(request.get_header("User-agent") == "Palomar-registry-query-publisher" for request in requests)
 
 
 def test_request_and_response_bounds(monkeypatch):

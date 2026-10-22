@@ -378,6 +378,12 @@ def validate_render(root: pathlib.Path, entry: dict[str, object], name: str) -> 
             errors.append(f"{name}:challenge_render: only the renderer-owned CSS file is permitted")
         for relative, text, policy in html_policies:
             expected_href = posixpath.relpath("palomar-render.css", str(policy.relative_path.parent))
+            start = text.find("<head>")
+            if start < 0 or not re.fullmatch(
+                r"[ \t\r\n\f]*(?:<!doctype html>[ \t\r\n\f]*)?"
+                r"<html(?:[ \t\r\n\f]+[^<>]*)?>[ \t\r\n\f]*", text[:start],
+            ):
+                errors.append(f"{name}:challenge_render: noncanonical document prefix: {relative}")
             if policy.ambiguous_markup:
                 errors.append(f"{name}:challenge_render: ambiguous HTML markup is forbidden: {relative}")
             if policy.links != [(True, {"rel": ["stylesheet"], "href": [expected_href]})]:
@@ -390,7 +396,6 @@ def validate_render(root: pathlib.Path, entry: dict[str, object], name: str) -> 
                 errors.append(f"{name}:challenge_render: expected one renderer-owned head style: {relative}")
                 continue
             surface_hash = hashlib.sha256("".join(policy.styles[0][2]).encode("utf-8")).hexdigest()
-            start = text.find("<head>")
             end = text.find("</head>", start)
             head = text[start:end + len("</head>")] if start >= 0 and end >= 0 else ""
             for asset in ("palomar-render.css", *REQUIRED_RENDER_SCRIPTS):

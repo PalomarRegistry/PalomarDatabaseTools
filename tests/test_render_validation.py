@@ -66,6 +66,7 @@ def test_renderer_owned_styles_validate_on_root_and_nested_pages(db):
     ("head-data", "stylesheet bytes do not match"),
     ("link-media", "untrusted stylesheet link"),
     ("upper-css", "only the renderer-owned CSS file"),
+    ("pre-head", "noncanonical document prefix"),
 ])
 def test_rehashed_untrusted_styles_are_rejected(db, mutation, marker):
     entry, bundle = _owned_styles_entry(db)
@@ -101,6 +102,8 @@ def test_rehashed_untrusted_styles_are_rejected(db, mutation, marker):
         page = page.replace('rel="stylesheet"', 'rel="stylesheet" media="print"')
     elif mutation == "upper-css":
         (bundle / "evil.CSS").write_text("body {display:none}")
+    elif mutation == "pre-head":
+        page = page.replace("<head>", "<textarea><head>").replace("</head>", "</head></textarea>")
     page_path.write_text(page)
     _rehash_bundle(db, entry)
     errors = render_validation.validate_render(db.path, entry, "entry.json")

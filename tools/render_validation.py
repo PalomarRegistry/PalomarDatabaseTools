@@ -76,6 +76,9 @@ TRUSTED_RENDER_SCRIPTS = {
             # presentational and state attributes, and counts the head and body
             # it rewrites.
             "c39c4bc61544b0c0b9b6f0605859aceb11a2bf9cbb5c9f22c492d938243dbea7",
+            # Renderer-owned CSS: preserve only the original trusted head's
+            # style nodes and remove stylesheet elements from dynamic content.
+            "7f5cea2896743f584f7397ddea879b4af8c9424d8ae5e8f81b14243c0bef5eb2",
         }
     ),
     "palomar-verso.js": frozenset(

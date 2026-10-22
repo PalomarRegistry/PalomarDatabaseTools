@@ -78,7 +78,7 @@ TRUSTED_RENDER_SCRIPTS = {
             "c39c4bc61544b0c0b9b6f0605859aceb11a2bf9cbb5c9f22c492d938243dbea7",
             # Renderer-owned CSS: preserve only the original trusted head's
             # style nodes and remove stylesheet elements from dynamic content.
-            "64ae1242cd0d318a3e264b66d9455ed3173f2609672c1597ec3d3e0050564892",
+            "37003e46e52ea8ca4ab4dc59e99a5fa35c4db8e029abddd7c4996df8b94815f6",
         }
     ),
     "palomar-verso.js": frozenset(
@@ -95,12 +95,15 @@ TRUSTED_RENDER_SCRIPTS = {
 }
 ACCEPTED_RENDER_CSPS = frozenset({RENDER_CSP})
 REQUIRED_RENDER_SCRIPTS = list(TRUSTED_RENDER_SCRIPTS)
-# New renderer generations bind both the external CSS and the inline palette.
-# Earlier immutable runtimes retain their original, separately reviewed policy.
+# Renderer-output consistency, in addition to the producer receipt checked by
+# registration. Runtime choice is not a submitter-controlled input. Legacy
+# acceptance also covers source-bound renders still awaiting registration; a
+# runtime digest is not used to infer whether a record has already published.
 TRUSTED_RENDER_STYLESETS = {
-    "64ae1242cd0d318a3e264b66d9455ed3173f2609672c1597ec3d3e0050564892": frozenset({
+    "37003e46e52ea8ca4ab4dc59e99a5fa35c4db8e029abddd7c4996df8b94815f6": frozenset({
         ("f16b4aa1e470cb136215b68cf37d60122ed4cfb3daf1ff3d761f87867a24f8d7",
-         "d8ec37ef050d7574db046aa9c8ea8a7d551e85b3d074d86c0d2d55f66530f285"),
+         "d8ec37ef050d7574db046aa9c8ea8a7d551e85b3d074d86c0d2d55f66530f285",
+         "f2e330b784bd915146b05201140bd2ea9b4dae32a938a90e10c158c81d1665a1"),
     }),
 }
 
@@ -121,6 +124,7 @@ class _RenderHTMLPolicyParser(HTMLParser):
         self.styles: list[tuple[bool, dict[str, list[str | None]], list[str]]] = []
         self.links: list[tuple[bool, dict[str, list[str | None]]]] = []
         self.current_style: int | None = None
+        self.ambiguous_markup = False
         self.relative_path = pathlib.PurePosixPath(relative_path)
 
     @staticmethod
@@ -214,6 +218,19 @@ class _RenderHTMLPolicyParser(HTMLParser):
         if self.head_depth == 1 and not self.csp_seen and data.strip():
             self.errors.append("non-whitespace text appears before the trusted CSP")
 
+    def handle_comment(self, data: str) -> None:
+        self.ambiguous_markup = True
+
+    def handle_decl(self, decl: str) -> None:
+        if decl.lower() != "doctype html":
+            self.ambiguous_markup = True
+
+    def handle_pi(self, data: str) -> None:
+        self.ambiguous_markup = True
+
+    def unknown_decl(self, data: str) -> None:
+        self.ambiguous_markup = True
+
 
 def _sha256(path: pathlib.Path) -> str:
     digest = hashlib.sha256()
@@ -263,7 +280,7 @@ def validate_render(root: pathlib.Path, entry: dict[str, object], name: str) -> 
     if bundle.is_symlink() or not bundle.is_dir():
         return [f"{name}:challenge_render: artifact directory is missing or symbolic"]
     files: list[dict[str, object]] = []
-    html_policies: list[tuple[str, _RenderHTMLPolicyParser]] = []
+    html_policies: list[tuple[str, str, _RenderHTMLPolicyParser]] = []
     total_bytes = 0
     paths: list[pathlib.Path] = []
     for path in bundle.rglob("*"):
@@ -321,7 +338,7 @@ def validate_render(root: pathlib.Path, entry: dict[str, object], name: str) -> 
                         f"{name}:challenge_render: malformed HTML file {relative}: {error}"
                     )
                 else:
-                    html_policies.append((relative, parser))
+                    html_policies.append((relative, html, parser))
                     if (
                         parser.head_count != 1
                         or len(parser.csp_values) != 1
@@ -359,8 +376,10 @@ def validate_render(root: pathlib.Path, entry: dict[str, object], name: str) -> 
         css_files = {path for path in hashes if pathlib.PurePosixPath(path).suffix.lower() == ".css"}
         if css_files != {"palomar-render.css"}:
             errors.append(f"{name}:challenge_render: only the renderer-owned CSS file is permitted")
-        for relative, policy in html_policies:
+        for relative, text, policy in html_policies:
             expected_href = posixpath.relpath("palomar-render.css", str(policy.relative_path.parent))
+            if policy.ambiguous_markup:
+                errors.append(f"{name}:challenge_render: ambiguous HTML markup is forbidden: {relative}")
             if policy.links != [(True, {"rel": ["stylesheet"], "href": [expected_href]})]:
                 errors.append(f"{name}:challenge_render: untrusted stylesheet link: {relative}")
             if (
@@ -371,7 +390,14 @@ def validate_render(root: pathlib.Path, entry: dict[str, object], name: str) -> 
                 errors.append(f"{name}:challenge_render: expected one renderer-owned head style: {relative}")
                 continue
             surface_hash = hashlib.sha256("".join(policy.styles[0][2]).encode("utf-8")).hexdigest()
-            if (hashes.get("palomar-render.css"), surface_hash) not in stylesets:
+            start = text.find("<head>")
+            end = text.find("</head>", start)
+            head = text[start:end + len("</head>")] if start >= 0 and end >= 0 else ""
+            for asset in ("palomar-render.css", *REQUIRED_RENDER_SCRIPTS):
+                relative_asset = posixpath.relpath(asset, str(policy.relative_path.parent))
+                head = head.replace(f'"{relative_asset}"', f'"../{asset}"')
+            head_hash = hashlib.sha256(head.encode("utf-8")).hexdigest()
+            if (hashes.get("palomar-render.css"), surface_hash, head_hash) not in stylesets:
                 errors.append(f"{name}:challenge_render: renderer-owned stylesheet bytes do not match: {relative}")
     canonical = json.dumps(files, sort_keys=True, separators=(",", ":")).encode("utf-8")
     actual_tree_hash = hashlib.sha256(canonical).hexdigest()

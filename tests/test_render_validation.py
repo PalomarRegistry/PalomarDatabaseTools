@@ -59,6 +59,13 @@ def test_renderer_owned_styles_validate_on_root_and_nested_pages(db):
     ("extra-style", "one renderer-owned head style"),
     ("link", "untrusted stylesheet link"),
     ("body-style", "one renderer-owned head style"),
+    ("head-comment", "ambiguous HTML markup"),
+    ("body-comment", "ambiguous HTML markup"),
+    ("marked", "ambiguous HTML markup"),
+    ("pi", "ambiguous HTML markup"),
+    ("head-data", "stylesheet bytes do not match"),
+    ("link-media", "untrusted stylesheet link"),
+    ("upper-css", "only the renderer-owned CSS file"),
 ])
 def test_rehashed_untrusted_styles_are_rejected(db, mutation, marker):
     entry, bundle = _owned_styles_entry(db)
@@ -80,6 +87,20 @@ def test_rehashed_untrusted_styles_are_rejected(db, mutation, marker):
         end = page.index("</style>", start) + len("</style>")
         style = page[start:end]
         page = (page[:start] + page[end:]).replace("</body>", style + "</body>")
+    elif mutation == "head-comment":
+        page = page.replace("</head>", '<!-- split --!><style>body{display:none}</style>--></head>')
+    elif mutation == "body-comment":
+        page = page.replace("</body>", "<!-- harmless --></body>")
+    elif mutation == "marked":
+        page = page.replace("</body>", "<![CDATA[<style>body{display:none}</style>]]></body>")
+    elif mutation == "pi":
+        page = page.replace("</body>", "<?probe?></body>")
+    elif mutation == "head-data":
+        page = page.replace("</head>", "<title>changed</title></head>")
+    elif mutation == "link-media":
+        page = page.replace('rel="stylesheet"', 'rel="stylesheet" media="print"')
+    elif mutation == "upper-css":
+        (bundle / "evil.CSS").write_text("body {display:none}")
     page_path.write_text(page)
     _rehash_bundle(db, entry)
     errors = render_validation.validate_render(db.path, entry, "entry.json")

@@ -626,10 +626,19 @@ def _bounded(tasks: Iterable[Callable[[], Any]], concurrency: int) -> list[Any]:
     results: list[Any] = []
     failure: BaseException | None = None
     remaining = iter(tasks)
-    with ThreadPoolExecutor(
-        max_workers=concurrency, thread_name_prefix="publish"
-    ) as pool:
-        running: set[Any] = set()
+    running: set[Any] = set()
+
+    def collect(finished: set[Any]) -> None:
+        nonlocal failure
+        for future in finished:
+            try:
+                results.append(future.result())
+            except BaseException as error:  # noqa: BLE001 - re-raised below
+                if failure is None:
+                    failure = error
+
+    pool = ThreadPoolExecutor(max_workers=concurrency, thread_name_prefix="publish")
+    try:
         while True:
             while failure is None and len(running) < concurrency:
                 task = next(remaining, None)
@@ -639,12 +648,24 @@ def _bounded(tasks: Iterable[Callable[[], Any]], concurrency: int) -> list[Any]:
             if not running:
                 break
             finished, running = wait(running, return_when=FIRST_COMPLETED)
-            for future in finished:
-                try:
-                    results.append(future.result())
-                except BaseException as error:  # noqa: BLE001 - re-raised below
-                    if failure is None:
-                        failure = error
+            collect(finished)
+    except BaseException as error:  # noqa: BLE001 - an interrupt in this thread
+        if failure is None:
+            failure = error
+    finally:
+        # Drain whatever was started, however this loop ended. An interrupt
+        # that arrives while draining is remembered and draining resumes: an
+        # exception must never reach the caller while a task here is still
+        # writing, or it could race whatever the caller does next.
+        while running:
+            try:
+                finished, running = wait(running)
+            except BaseException as error:  # noqa: BLE001 - see above
+                if failure is None:
+                    failure = error
+                continue
+            collect(finished)
+        pool.shutdown(wait=True)
     if failure is not None:
         raise failure
     return results

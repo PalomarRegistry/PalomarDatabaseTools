@@ -2168,3 +2168,87 @@ def test_the_command_line_passes_its_concurrency_through(monkeypatch, tmp_path):
     monkeypatch.setattr("sys.argv", ["publish_snapshot.py", "--site", "s", "--concurrency", "0"])
     with pytest.raises(SystemExit):
         publisher.main()
+
+
+def test_an_interrupt_in_a_worker_drains_its_peers_before_it_propagates(tmp_path):
+    client = SlowR2(delay=0.01)
+    before, new, site = _published_then_rebuilt(tmp_path, client)
+    client.failures[("put", f"public/entries/{new}.json")] = [KeyboardInterrupt()]
+
+    with pytest.raises(KeyboardInterrupt):
+        publish_snapshot(client, "bucket", site, concurrency=8)
+
+    started = sum(1 for event, _ in client.events if event.endswith("-start"))
+    ended = sum(1 for event, _ in client.events if event.endswith("-end"))
+    assert started == ended
+    assert _pointer(client) == before
+
+
+def test_repeated_interrupts_while_draining_still_wait_for_every_task(monkeypatch):
+    """A second Ctrl-C used to be able to interrupt the executor's own
+    shutdown and reach the caller while a task was still writing."""
+    import threading
+
+    import publish_snapshot as publisher
+
+    release = threading.Event()
+    finished = []
+    real_wait = publisher.wait
+    interrupts = {"left": 3}
+
+    def interrupted_wait(futures, **options):
+        if interrupts["left"]:
+            interrupts["left"] -= 1
+            release.set() if interrupts["left"] == 0 else None
+            raise KeyboardInterrupt()
+        return real_wait(futures, **options)
+
+    def task():
+        # Released only once the drain has absorbed every interrupt and gone
+        # back to waiting, which is what an interruptible drain never does.
+        finished.append(release.wait(2))
+
+    monkeypatch.setattr(publisher, "wait", interrupted_wait)
+    with pytest.raises(KeyboardInterrupt):
+        publisher._bounded([task, task, task], 3)
+    assert finished == [True, True, True]
+
+
+def test_a_lost_answer_whose_readback_disagrees_fails_without_overwriting(
+    tmp_path, no_backoff
+):
+    """The retry after a lost answer is conditional, so it cannot replace
+    what is there; if what is there is not this release's, that is fatal."""
+    client = SlowR2()
+    before, new, site = _published_then_rebuilt(tmp_path, client)
+    entry = f"public/entries/{new}.json"
+    client.lost_answers.add(entry)
+    client.corrupt.add(entry)
+
+    with pytest.raises(RuntimeError, match="readback verification failed"):
+        publish_snapshot(client, "bucket", site, concurrency=8)
+
+    assert client.calls[("put", entry)] == 2
+    assert client.calls[("get", entry)] == 1
+    assert _pointer(client) == before
+
+
+def test_an_incremental_page_failure_is_not_retried(tmp_path):
+    client = SlowR2()
+    first, second = _identifier(1), _identifier(2)
+    publish_snapshot(client, "bucket", build_site(tmp_path, "one", [first]))
+    base = release_delta.parse(
+        client.objects[
+            f"snapshots/{json.loads(_pointer(client))['release']}/release-delta.json"
+        ]["Body"]
+    )
+    before = _pointer(client)
+    site = build_site(tmp_path, "two", [first, second])
+    _incremental(base, site, entries=[first, second], added=[second])
+    client.failures[("get", "public/feed.xml")] = [Unavailable()]
+    client.calls.clear()
+
+    with pytest.raises(Unavailable):
+        publish_snapshot(client, "bucket", site, concurrency=8)
+    assert client.calls[("get", "public/feed.xml")] == 1
+    assert _pointer(client) == before

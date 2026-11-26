@@ -19,7 +19,7 @@ from typing import Any
 
 from entry_validation import (
     PALOMAR_ID_RE,
-    VERIFICATION_REPOSITORY,
+    VERIFY_WORKFLOW_PATHS,
     WORKFLOW_URL_RE,
 )
 
@@ -38,7 +38,6 @@ EVIDENCE_FILES = frozenset(
 # below evidence/. Keeping this derived from the permitted bundle files makes
 # the database-wide sweep follow this module's closed filesystem contract.
 MAX_EVIDENCE_NODES = len(EVIDENCE_FILES) + 2
-VERIFY_WORKFLOW_PATH = ".github/workflows/submission.yml"
 
 
 def _sha256(path: pathlib.Path) -> str:
@@ -52,7 +51,7 @@ def _sha256(path: pathlib.Path) -> str:
 # Which mechanical report contract a record of each entry schema cites. Schema-1
 # reports carry the four separately built tool commits; schema-2 reports carry
 # the Lean toolchain commit and the digests of the tools it bundles.
-REPORT_SCHEMA_FOR_ENTRY = {3: 1, 4: 1, 5: 2}
+REPORT_SCHEMA_FOR_ENTRY = {3: 1, 4: 1, 5: 2, 6: 2}
 TOOLCHAIN_PROVENANCE_FIELDS = (
     "toolchain_commit",
     "tool_digests",
@@ -73,6 +72,18 @@ def provenance_bindings(
         else TOOL_COMMIT_FIELDS
     )
     return tuple((report.get(field), verification.get(field), field) for field in fields)
+
+
+def confidential_bindings(
+    report: dict, verification: dict
+) -> tuple[tuple[object, object, str], ...]:
+    """A confidential run's report names the caller and the pipeline it called."""
+    if "called_workflow_commit" not in verification:
+        return ()
+    return (
+        (report.get("run_repository"), verification.get("repository"), "run_repository"),
+        (report.get("pipeline_commit"), verification.get("called_workflow_commit"), "pipeline_commit"),
+    )
 
 
 def _mapping(value: object) -> Mapping[str, Any]:
@@ -215,6 +226,7 @@ def validate_evidence(
                     (report.get("workflow_url"), verification.get("workflow_url"), "workflow_url"),
                     (report.get("checked_at"), verification.get("verified_at"), "checked_at"),
                     *provenance_bindings(entry, report, verification),
+                    *confidential_bindings(report, verification),
                     (source.get("repository"), _mapping(entry.get("source")).get("repository"), "source.repository"),
                     (source.get("commit"), _mapping(entry.get("source")).get("commit"), "source.commit"),
                     (challenge.get("sha256"), verification.get("challenge_sha256"), "challenge.sha256"),
@@ -303,6 +315,9 @@ def validate_evidence(
             run_match = WORKFLOW_URL_RE.fullmatch(run_url) if isinstance(run_url, str) else None
             tail = run_url.rsplit("/", 1)[-1] if run_match else ""
             expected_run_id = int(tail) if tail.isdigit() else None
+            # The run's repository is the one its URL names; the entry checks
+            # already bind that URL to verification.repository.
+            run_repository = run_match.group("repository") if run_match else None
             required = {
                 "schema_version", "repository", "run_id", "run_attempt", "workflow_path",
                 "workflow_commit", "workflow_url", "event", "status", "conclusion",
@@ -313,10 +328,10 @@ def validate_evidence(
             else:
                 expected_values = {
                     "schema_version": 1,
-                    "repository": VERIFICATION_REPOSITORY,
+                    "repository": run_repository,
                     "run_id": expected_run_id,
                     "run_attempt": verification.get("workflow_run_attempt"),
-                    "workflow_path": VERIFY_WORKFLOW_PATH,
+                    "workflow_path": VERIFY_WORKFLOW_PATHS.get(run_repository),
                     "workflow_commit": verification.get("workflow_commit"),
                     "workflow_url": run_url,
                     "event": "workflow_dispatch",

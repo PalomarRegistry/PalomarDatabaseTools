@@ -1028,3 +1028,22 @@ def test_scoped_scores_report_an_orphan_new_score(repo):
     scoped = validate(repo.path, scope)
     assert scoped == validate(repo.path)
     assert any("not recorded for any registered version" in error for error in scoped)
+
+
+def test_an_appended_confidential_record_is_scoped_and_checked(repo):
+    """A released confidential record is an ordinary immutable addition."""
+    base = repo.commit("before the release")
+    data = repo.confidential(repo.entry_data(SECOND, 1))
+    repo.install_entry(data)
+    repo.commit("release a confidential record")
+    scope = scope_of(repo.path, base)
+    assert scope is not None, "it refused to scope a confidential addition"
+    assert validate(repo.path, scope) == []
+
+    stored = repo.read_json(f"entries/{SECOND}-v1.json")
+    stored.pop("confidential")
+    repo.write_json(f"entries/{SECOND}-v1.json", stored)
+    repo.commit("drop the confidential block")
+    scope = scope_of(repo.path, base)
+    assert scope is not None
+    assert any("confidential" in error for error in validate(repo.path, scope))

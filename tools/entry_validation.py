@@ -30,11 +30,16 @@ from schema_policy import (
 
 ENTRY_SCHEMA_VERSION = 3
 ENTRY_SCHEMA_NAME = "schema-v3.json"
-ENTRY_SCHEMA_NAMES = {3: "schema-v3.json", 4: "schema-v4.json", 5: "schema-v5.json"}
+ENTRY_SCHEMA_NAMES = {
+    3: "schema-v3.json",
+    4: "schema-v4.json",
+    5: "schema-v5.json",
+    6: "schema-v6.json",
+}
 # Contracts a database may not have published yet. The tooling has to be
 # pinned before the file can be added (the previous tooling rejects a schema
 # it does not know), so an absent one is not an error until a record needs it.
-OPTIONAL_ENTRY_SCHEMA_VERSIONS = frozenset({5})
+OPTIONAL_ENTRY_SCHEMA_VERSIONS = frozenset({5, 6})
 ENTRY_SCHEMA_EVALUATION_ERROR = "entry schema cannot be evaluated safely"
 PALOMAR_ID_RE = re.compile(
     r"PALOMAR-(?P<date>[0-9]{4}-[0-9]{2}-[0-9]{2})-(?P<serial>[0-9]{6})"
@@ -44,9 +49,17 @@ LICENSE_PATH_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Verification identity is fixed by the current entry contract. The run URL is
-# therefore derived rather than accepted as an independent assertion.
+# Verification identity is fixed by the entry contract. The run URL is
+# therefore derived rather than accepted as an independent assertion. From
+# schema 6 a record may instead name the private caller repository that runs
+# confidential submissions; each repository has exactly one verify workflow.
 VERIFICATION_REPOSITORY = "PalomarRegistry/PalomarSubmission"
+CONFIDENTIAL_RUNS_REPOSITORY = "PalomarRegistry/PalomarConfidentialRuns"
+VERIFY_WORKFLOW_PATHS = {
+    VERIFICATION_REPOSITORY: ".github/workflows/submission.yml",
+    CONFIDENTIAL_RUNS_REPOSITORY: ".github/workflows/verify.yml",
+}
+CONFIDENTIAL_SCHEMA_VERSION = 6
 HIGH_TRUST_CHALLENGE_REPOSITORIES = frozenset(
     {
         "leanprover-community/mathlib4",
@@ -56,8 +69,18 @@ HIGH_TRUST_CHALLENGE_REPOSITORIES = frozenset(
 GITHUB_REPOSITORY_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\Z")
 COMMIT_RE = re.compile(r"[0-9a-f]{40}\Z")
 WORKFLOW_URL_RE = re.compile(
-    rf"https://github\.com/{re.escape(VERIFICATION_REPOSITORY)}/actions/runs/[1-9][0-9]*\Z"
+    r"https://github\.com/(?P<repository>"
+    + "|".join(re.escape(repository) for repository in VERIFY_WORKFLOW_PATHS)
+    + r")/actions/runs/[1-9][0-9]*\Z"
 )
+
+
+def verification_repositories(entry: Mapping[str, Any]) -> frozenset[str]:
+    """The verifier repositories an entry's declared schema admits."""
+    version = entry.get("schema_version")
+    if type(version) is int and version >= CONFIDENTIAL_SCHEMA_VERSION:
+        return frozenset(VERIFY_WORKFLOW_PATHS)
+    return frozenset({VERIFICATION_REPOSITORY})
 
 # The verifier canonicalizes this historical repository name before recording
 # challenge trust. Project-dependency metadata can still contain the old name.
@@ -133,7 +156,7 @@ def load_entry_schema(
     validators, errors = load_entry_schemas(root)
     compatibility_errors = [
         error for error in errors
-        if not error.startswith(("schema-v4.json:", "schema-v5.json:"))
+        if not error.startswith(("schema-v4.json:", "schema-v5.json:", "schema-v6.json:"))
     ]
     normalized: list[str] = []
     for error in compatibility_errors:
@@ -344,15 +367,37 @@ def entry_consistency_errors(name: str, data: Mapping[str, Any]) -> list[str]:
                     f"must be {expected_tree_url}"
                 )
 
-    # The run URL is derived from the fixed verifier repository and run id, so
-    # the three facts cannot disagree independently.
+    # The run URL is derived from the verifier repository and run id, so the
+    # three facts cannot disagree independently.
     repository = verification.get("repository")
-    if repository != VERIFICATION_REPOSITORY:
+    allowed_repositories = verification_repositories(data)
+    if repository not in allowed_repositories:
         errors.append(
-            f"{name}:verification.repository: must be {VERIFICATION_REPOSITORY}"
+            f"{name}:verification.repository: must be "
+            f"{' or '.join(sorted(allowed_repositories))}"
         )
+    elif verification.get("workflow_path") != VERIFY_WORKFLOW_PATHS[repository]:
+        errors.append(
+            f"{name}:verification.workflow_path: must be {VERIFY_WORKFLOW_PATHS[repository]}"
+        )
+    # A confidential record is exactly one verified in the private caller
+    # repository. The schema says so too; this keeps the rule if a future
+    # contract forgets it.
+    if (repository == CONFIDENTIAL_RUNS_REPOSITORY) != ("confidential" in data):
+        errors.append(
+            f"{name}:confidential: must be present exactly when verification.repository "
+            f"is {CONFIDENTIAL_RUNS_REPOSITORY}"
+        )
+    confidential = data.get("confidential")
+    if isinstance(confidential, dict):
+        held_at = confidential.get("held_at")
+        registered_at = data.get("registered_at")
+        # Both are schema-checked RFC 3339 UTC instants in one fixed form, so
+        # string order is time order.
+        if isinstance(held_at, str) and isinstance(registered_at, str) and held_at > registered_at:
+            errors.append(f"{name}:confidential.held_at: must not be after registered_at")
     run_id = verification.get("run_id")
-    if repository == VERIFICATION_REPOSITORY and isinstance(run_id, int):
+    if repository in allowed_repositories and isinstance(run_id, int):
         expected_run_url = f"https://github.com/{repository}/actions/runs/{run_id}"
         if verification.get("workflow_url") != expected_run_url:
             errors.append(f"{name}:verification.workflow_url: must be {expected_run_url}")

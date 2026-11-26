@@ -97,7 +97,9 @@ FROZEN = (
     ),
 )
 ENTRY_SCHEMA_NAME = "schema-v3.json"
-ENTRY_SCHEMA_NAMES = frozenset({ENTRY_SCHEMA_NAME, "schema-v4.json", "schema-v5.json"})
+ENTRY_SCHEMA_NAMES = frozenset(
+    {ENTRY_SCHEMA_NAME, "schema-v4.json", "schema-v5.json", "schema-v6.json"}
+)
 LAUNCH_MARKER = ".palomar-launched"
 # The schema transitions this check will accept, and only when the change that
 # makes one also introduces its named manifest binding it. The manifest names the
@@ -314,7 +316,7 @@ def check(repo: pathlib.Path, base: str, head: str) -> list[str]:
                 # A new versioned contract may be introduced without changing
                 # the bytes or meaning of any older contract. From this commit
                 # onward the ordinary-file addition is frozen like its peers.
-                if path in ("schema-v4.json", "schema-v5.json"):
+                if path in ("schema-v4.json", "schema-v5.json", "schema-v6.json"):
                     continue
                 errors.append(f"{path}: added after launch, but the published entry schema is frozen")
             elif old_mode != new_mode:

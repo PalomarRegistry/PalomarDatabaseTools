@@ -26,6 +26,9 @@ def _submission_id(identifier: str, version: int) -> str:
     return hashlib.sha256(f"{identifier}-v{version}".encode()).hexdigest()[:12]
 
 
+CONFIDENTIAL_RUNS = "PalomarRegistry/PalomarConfidentialRuns"
+
+
 def _preservation_rows(data: dict) -> list[dict[str, str]]:
     source = data["source"]
     candidates = [(source["repository"], source["commit"])]
@@ -40,7 +43,7 @@ def _preservation_rows(data: dict) -> list[dict[str, str]]:
     unique = {}
     for repository, commit in candidates:
         unique.setdefault((repository.casefold(), commit), (repository, commit))
-    return [
+    rows = [
         {
             "source_repository": repository,
             "commit": commit,
@@ -51,6 +54,7 @@ def _preservation_rows(data: dict) -> list[dict[str, str]]:
             unique.values(), key=lambda item: (item[0].casefold(), item[1])
         )
     ]
+    return rows
 
 
 SAMPLE_SCORES = {
@@ -71,6 +75,7 @@ class Database:
         shutil.copy(ROOT / "schema-v3.json", path / "schema-v3.json")
         shutil.copy(ROOT / "schema-v4.json", path / "schema-v4.json")
         shutil.copy(ROOT / "schema-v5.json", path / "schema-v5.json")
+        shutil.copy(ROOT / "schema-v6.json", path / "schema-v6.json")
         shutil.copy(
             ROOT / "tests" / "fixtures" / "synthetic-scores-schema.json",
             path / "scores-v1.json",
@@ -165,6 +170,34 @@ class Database:
         render["bwrap_source_tag"] = "v0.12.0"
         return data
 
+    def confidential(self, data: dict) -> dict:
+        """Rewrite a fixture record into a released confidential schema-6 record.
+
+        The verification and render runs are in the private caller repository.
+        """
+        data = self.toolchain_provenance(data)
+        data["schema_version"] = 6
+        run_id = 41000000001
+        verification = data["verification"]
+        verification.update({
+            "repository": CONFIDENTIAL_RUNS,
+            "workflow_path": ".github/workflows/verify.yml",
+            "run_id": run_id,
+            "workflow_url": f"https://github.com/{CONFIDENTIAL_RUNS}/actions/runs/{run_id}",
+            "called_workflow_commit": "a" * 40,
+        })
+        data["challenge_render"].update({
+            "repository": CONFIDENTIAL_RUNS,
+            "workflow_path": ".github/workflows/render.yml",
+            "called_workflow_commit": "a" * 40,
+        })
+        data["confidential"] = {
+            "held_at": "2026-07-20T10:00:00Z",
+            "run_visibility": "private",
+            "certificate_sha256": {"full": "c" * 64},
+        }
+        return data
+
     def add_entry(self, identifier: str, version: int, **overrides: object) -> pathlib.Path:
         data = self.entry_data(identifier, version, **overrides)
         return self.install_entry(data)
@@ -231,7 +264,7 @@ class Database:
             "checked_at": verification["verified_at"],
             "workflow_url": verification["workflow_url"],
         }
-        if data.get("schema_version") == 5:
+        if data.get("schema_version") in (5, 6):
             report.update({field: verification[field] for field in (
                 "toolchain_commit", "tool_digests", "kernels", "protected_config_sha256", "bwrap_source_tag",
             )})
@@ -239,8 +272,13 @@ class Database:
             report.update({field: verification[field] for field in (
                 "comparator_commit", "lean4export_commit", "landrun_commit", "nanoda_commit",
             )})
+        if "called_workflow_commit" in verification:
+            report.update({
+                "run_repository": verification["repository"],
+                "pipeline_commit": verification["called_workflow_commit"],
+            })
         report.update({
-            "schema_version": 2 if data.get("schema_version") == 5 else 1,
+            "schema_version": 2 if data.get("schema_version") in (5, 6) else 1,
             "comparator": {"path": data["formalization"]["comparator_config_path"]},
             "formalization": {"path": data["formalization"]["formalization_metadata_path"]},
             "lakefile": {"path": data["formalization"]["lakefile_path"]},
@@ -253,10 +291,10 @@ class Database:
         run_id = int(tail) if tail.isdigit() else verification.get("run_id", 1)
         provenance = {
             "schema_version": 1,
-            "repository": "PalomarRegistry/PalomarSubmission",
+            "repository": verification["repository"],
             "run_id": run_id,
             "run_attempt": 1,
-            "workflow_path": ".github/workflows/submission.yml",
+            "workflow_path": verification["workflow_path"],
             "workflow_commit": workflow_commit,
             "workflow_url": verification["workflow_url"],
             "event": "workflow_dispatch",

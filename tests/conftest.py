@@ -54,6 +54,10 @@ def _preservation_rows(data: dict) -> list[dict[str, str]]:
             unique.values(), key=lambda item: (item[0].casefold(), item[1])
         )
     ]
+    if "confidential" in data:
+        for row in rows:
+            if (row["source_repository"], row["commit"]) == (source["repository"], source["commit"]):
+                row["kind"] = "restored-from-bundle"
     return rows
 
 
@@ -173,7 +177,9 @@ class Database:
     def confidential(self, data: dict) -> dict:
         """Rewrite a fixture record into a released confidential schema-6 record.
 
-        The verification and render runs are in the private caller repository.
+        The verification and render runs are in the private caller repository,
+        and the submitted source is restored into a standalone archive
+        repository from Palomar's snapshot; dependencies are forked as usual.
         """
         data = self.toolchain_provenance(data)
         data["schema_version"] = 6
@@ -194,7 +200,9 @@ class Database:
         data["confidential"] = {
             "held_at": "2026-07-20T10:00:00Z",
             "run_visibility": "private",
-            "certificate_sha256": {"full": "c" * 64},
+            "snapshot_sha256": "c" * 64,
+            "publication_manifest_sha256": "d" * 64,
+            "full_certificates": [{"id": "pcf-" + "a" * 26, "sha256": "e" * 64}],
         }
         return data
 
@@ -276,6 +284,7 @@ class Database:
             report.update({
                 "run_repository": verification["repository"],
                 "pipeline_commit": verification["called_workflow_commit"],
+                "snapshot_sha256": data["confidential"]["snapshot_sha256"],
             })
         report.update({
             "schema_version": 2 if data.get("schema_version") in (5, 6) else 1,

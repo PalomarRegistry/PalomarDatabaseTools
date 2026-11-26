@@ -396,6 +396,23 @@ def entry_consistency_errors(name: str, data: Mapping[str, Any]) -> list[str]:
         # string order is time order.
         if isinstance(held_at, str) and isinstance(registered_at, str) and held_at > registered_at:
             errors.append(f"{name}:confidential.held_at: must not be after registered_at")
+        certificates = confidential.get("full_certificates")
+        if isinstance(certificates, list):
+            for field in ("id", "sha256"):
+                values = [_mapping(item).get(field) for item in certificates]
+                if len(values) != len(set(map(str, values))):
+                    errors.append(
+                        f"{name}:confidential.full_certificates: {field} is duplicated"
+                    )
+    elif isinstance(preservation_rows := _mapping(data.get("preservation")).get("repositories"), list):
+        # Only Palomar's private snapshot of a confidential submission can be
+        # restored into a standalone archive repository.
+        for position, row in enumerate(preservation_rows):
+            if _mapping(row).get("kind") == "restored-from-bundle":
+                errors.append(
+                    f"{name}:preservation.repositories.{position}.kind: only a confidential "
+                    "record may be restored from a bundle"
+                )
     run_id = verification.get("run_id")
     if repository in allowed_repositories and isinstance(run_id, int):
         expected_run_url = f"https://github.com/{repository}/actions/runs/{run_id}"

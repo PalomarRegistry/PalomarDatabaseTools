@@ -75,14 +75,20 @@ def provenance_bindings(
 
 
 def confidential_bindings(
-    report: dict, verification: dict
+    report: dict, verification: dict, entry: dict
 ) -> tuple[tuple[object, object, str], ...]:
-    """A confidential run's report names the caller and the pipeline it called."""
+    """A confidential run's report names the caller, the pipeline it called,
+    and the verified snapshot it read the source from."""
     if "called_workflow_commit" not in verification:
         return ()
     return (
         (report.get("run_repository"), verification.get("repository"), "run_repository"),
         (report.get("pipeline_commit"), verification.get("called_workflow_commit"), "pipeline_commit"),
+        (
+            report.get("snapshot_sha256"),
+            _mapping(entry.get("confidential")).get("snapshot_sha256"),
+            "snapshot_sha256",
+        ),
     )
 
 
@@ -226,7 +232,7 @@ def validate_evidence(
                     (report.get("workflow_url"), verification.get("workflow_url"), "workflow_url"),
                     (report.get("checked_at"), verification.get("verified_at"), "checked_at"),
                     *provenance_bindings(entry, report, verification),
-                    *confidential_bindings(report, verification),
+                    *confidential_bindings(report, verification, entry),
                     (source.get("repository"), _mapping(entry.get("source")).get("repository"), "source.repository"),
                     (source.get("commit"), _mapping(entry.get("source")).get("commit"), "source.commit"),
                     (challenge.get("sha256"), verification.get("challenge_sha256"), "challenge.sha256"),

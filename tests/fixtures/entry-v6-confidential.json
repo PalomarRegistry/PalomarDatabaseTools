@@ -63,13 +63,15 @@
         "source_repository": "example-org/confidential-fixture",
         "commit": "1111111111111111111111111111111111111111",
         "fork_repository": "PalomarArchive/example-org-confidential-fixture",
-        "ref": "refs/tags/palomar/PALOMAR-2026-11-26-000001-v1/1111111111111111111111111111111111111111"
+        "ref": "refs/tags/palomar/PALOMAR-2026-11-26-000001-v1/1111111111111111111111111111111111111111",
+        "kind": "restored-from-bundle"
       },
       {
         "source_repository": "leanprover-community/mathlib4",
         "commit": "2222222222222222222222222222222222222222",
         "fork_repository": "PalomarArchive/mathlib4",
-        "ref": "refs/tags/palomar/PALOMAR-2026-11-26-000001-v1/2222222222222222222222222222222222222222"
+        "ref": "refs/tags/palomar/PALOMAR-2026-11-26-000001-v1/2222222222222222222222222222222222222222",
+        "kind": "fork"
       }
     ]
   },
@@ -187,8 +189,17 @@
   "confidential": {
     "held_at": "2026-07-21T10:00:00Z",
     "run_visibility": "private",
-    "certificate_sha256": {
-      "full": "1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
-    }
+    "snapshot_sha256": "1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
+    "publication_manifest_sha256": "2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+    "full_certificates": [
+      {
+        "id": "pcf-abcdefghijklmnopqrstuvwxyz",
+        "sha256": "3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c"
+      },
+      {
+        "id": "pcf-234567abcdefghijklmnopqrst",
+        "sha256": "4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d"
+      }
+    ]
   }
 }

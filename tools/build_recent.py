@@ -67,6 +67,9 @@ ROW_KEYS = {
 }
 
 
+PRESERVATION_KINDS = frozenset({"fork", "restored-from-bundle"})
+
+
 def validate_entry_schema_for_recent(schema: object, name: str) -> None:
     """Check only that the canonical schema guarantees what projection reads.
 
@@ -134,15 +137,16 @@ def _source_preservation(entry: dict[str, Any]) -> dict[str, Any]:
             f"{entry['id']}-v{entry['version']} has {len(matches)} source archive mappings"
         )
     mapping = matches[0]
-    return {
-        "repositories": [
-            {
-                "source_repository": mapping["source_repository"],
-                "commit": mapping["commit"],
-                "fork_repository": mapping["fork_repository"],
-            }
-        ]
+    summary = {
+        "source_repository": mapping["source_repository"],
+        "commit": mapping["commit"],
+        "fork_repository": mapping["fork_repository"],
     }
+    # Schema 6: a source restored into a standalone archive repository says so,
+    # so a card can describe its archive link. Absent means a native fork.
+    if "kind" in mapping:
+        summary["kind"] = mapping["kind"]
+    return {"repositories": [summary]}
 
 
 def row(entry: dict[str, Any], versions: int) -> dict[str, Any]:
@@ -338,11 +342,16 @@ def validate_recent(document: object) -> dict[str, Any]:
             raise ValueError(
                 f"{RECENT_PATH}: {where}.preservation must contain one source mapping"
             )
+        mapping_keys = {"source_repository", "commit", "fork_repository"}
+        if isinstance(repositories[0], dict) and "kind" in repositories[0]:
+            mapping_keys = mapping_keys | {"kind"}
         mapping = _exact(
             repositories[0],
-            {"source_repository", "commit", "fork_repository"},
+            mapping_keys,
             f"{where}.preservation.repositories[0]",
         )
+        if mapping.get("kind", "fork") not in PRESERVATION_KINDS:
+            raise ValueError(f"{RECENT_PATH}: {where}.preservation has an unknown kind")
         if (
             not isinstance(mapping["source_repository"], str)
             or mapping["source_repository"].casefold() != repository.casefold()

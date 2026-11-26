@@ -2,14 +2,15 @@
 
 A confidential submission is verified and rendered in the private caller
 repository PalomarRegistry/PalomarConfidentialRuns, and its record carries a
-`confidential` block exactly when that is so. Its submitted source may be
-restored into a standalone PalomarArchive repository from Palomar's private
-snapshot rather than forked, when the upstream was still private at release;
-the v5 preservation shape already admits that, so v6 does not change it.
+`confidential` block exactly when that is so (contract v2, section 2.5). Its
+submitted source may be restored into a standalone PalomarArchive repository
+from Palomar's verified snapshot rather than forked, which the preservation
+row says with `kind: "restored-from-bundle"`; absent `kind` means a fork.
 
-The block carries one certificate digest, of the full certificate. A digest of
-the anonymous certificate would let a referee holding it find this record and
-so unblind a double-blind review; it is refused.
+The block binds the snapshot, the consented publication manifest and every
+full certificate issued. Nothing anonymous is published: a digest of an
+anonymous certificate would let a referee holding it find this record and so
+unblind a double-blind review.
 """
 
 from __future__ import annotations
@@ -63,6 +64,8 @@ def test_v6_is_v5_with_the_confidential_additions_and_nothing_else():
         "enum": [".github/workflows/render-challenge.yml", ".github/workflows/render.yml"]
     }
     render["called_workflow_commit"] = added["challenge_render"]["properties"]["called_workflow_commit"]
+    row = expected["properties"]["preservation"]["properties"]["repositories"]["items"]["properties"]
+    row["kind"] = added["preservation"]["properties"]["repositories"]["items"]["properties"]["kind"]
     expected["properties"]["confidential"] = added["confidential"]
     expected["allOf"].append(actual["allOf"][-1])
     assert actual == expected
@@ -72,10 +75,17 @@ def test_v6_is_v5_with_the_confidential_additions_and_nothing_else():
     assert "confidential" not in actual["required"]
     block = actual["properties"]["confidential"]
     assert block["additionalProperties"] is False
-    assert block["properties"]["certificate_sha256"]["additionalProperties"] is False
-    assert set(block["properties"]) == {"held_at", "run_visibility", "certificate_sha256"}
-    assert set(block["properties"]["certificate_sha256"]["properties"]) == {"full"}
-    assert actual["properties"]["preservation"] == _schema(5)["properties"]["preservation"]
+    assert set(block["properties"]) == set(block["required"]) == {
+        "held_at", "run_visibility", "snapshot_sha256", "publication_manifest_sha256", "full_certificates",
+    }
+    certificates = block["properties"]["full_certificates"]
+    assert (certificates["minItems"], certificates["maxItems"]) == (1, 20)
+    assert certificates["items"]["additionalProperties"] is False
+    assert set(certificates["items"]["properties"]) == {"id", "sha256"}
+    assert row["kind"]["enum"] == ["fork", "restored-from-bundle"]
+    assert "anonymous" not in json.dumps(actual["properties"]["confidential"]).replace(
+        "Carries nothing anonymous", ""
+    )
 
 
 # The published record shape, as a committed fixture for the site and reviewer.
@@ -140,12 +150,14 @@ def synthetic_confidential_record() -> dict:
                     "commit": source_commit,
                     "fork_repository": "PalomarArchive/example-org-confidential-fixture",
                     "ref": f"{tag}/{source_commit}",
+                    "kind": "restored-from-bundle",
                 },
                 {
                     "source_repository": "leanprover-community/mathlib4",
                     "commit": mathlib_commit,
                     "fork_repository": "PalomarArchive/mathlib4",
                     "ref": f"{tag}/{mathlib_commit}",
+                    "kind": "fork",
                 },
             ],
         },
@@ -233,7 +245,12 @@ def synthetic_confidential_record() -> dict:
         "confidential": {
             "held_at": "2026-07-21T10:00:00Z",
             "run_visibility": "private",
-            "certificate_sha256": {"full": "1a" * 32},
+            "snapshot_sha256": "1a" * 32,
+            "publication_manifest_sha256": "2b" * 32,
+            "full_certificates": [
+                {"id": "pcf-" + "abcdefghijklmnopqrstuvwxyz", "sha256": "3c" * 32},
+                {"id": "pcf-" + "234567abcdefghijklmnopqrst", "sha256": "4d" * 32},
+            ],
         },
     }
 
@@ -265,6 +282,8 @@ def test_a_public_v6_record_is_a_v5_record_with_the_new_version():
     record["verification"].pop("called_workflow_commit")
     for field in ("repository", "workflow_path", "called_workflow_commit"):
         record["challenge_render"].pop(field)
+    for row in record["preservation"]["repositories"]:
+        row.pop("kind")
     assert _schema_errors(record) == []
     assert entry_consistency_errors("public", record) == []
     as_v5 = copy.deepcopy(record)
@@ -282,6 +301,8 @@ def _public(record: dict) -> dict:
     record["verification"].pop("called_workflow_commit")
     for field in ("repository", "workflow_path", "called_workflow_commit"):
         record["challenge_render"].pop(field)
+    for row in record["preservation"]["repositories"]:
+        row.pop("kind")
     return record
 
 
@@ -300,17 +321,43 @@ def _mutations() -> dict[str, dict]:
     expiry["confidential"]["expires_on"] = "2028-07-21"
     cases["embargo terms in the block"] = expiry
 
-    certificate = copy.deepcopy(base)
-    certificate["confidential"]["certificate_sha256"]["extra"] = "0" * 64
-    cases["an extra certificate digest"] = certificate
+    for field in ("snapshot_sha256", "publication_manifest_sha256", "full_certificates", "held_at"):
+        missing_field = copy.deepcopy(base)
+        missing_field["confidential"].pop(field)
+        cases[f"a block without {field}"] = missing_field
 
     anonymous = copy.deepcopy(base)
-    anonymous["confidential"]["certificate_sha256"]["anonymous"] = "2b" * 32
-    cases["an anonymous-certificate digest"] = anonymous
+    anonymous["confidential"]["anonymous_sha256"] = "2b" * 32
+    cases["an anonymous digest in the block"] = anonymous
 
-    no_full = copy.deepcopy(base)
-    no_full["confidential"]["certificate_sha256"].pop("full")
-    cases["a missing full-certificate digest"] = no_full
+    anonymous_certificates = copy.deepcopy(base)
+    anonymous_certificates["confidential"]["anonymous_certificates"] = [
+        {"id": "pca-" + "a" * 26, "sha256": "2b" * 32}
+    ]
+    cases["anonymous certificates in the block"] = anonymous_certificates
+
+    anonymous_in_item = copy.deepcopy(base)
+    anonymous_in_item["confidential"]["full_certificates"][0]["anonymous"] = "2b" * 32
+    cases["an anonymous digest beside a full certificate"] = anonymous_in_item
+
+    anonymous_id = copy.deepcopy(base)
+    anonymous_id["confidential"]["full_certificates"][0]["id"] = "pca-" + "a" * 26
+    cases["an anonymous certificate listed as full"] = anonymous_id
+
+    no_certificates = copy.deepcopy(base)
+    no_certificates["confidential"]["full_certificates"] = []
+    cases["no full certificate"] = no_certificates
+
+    too_many = copy.deepcopy(base)
+    too_many["confidential"]["full_certificates"] = [
+        {"id": "pcf-" + chr(ord("a") + position) * 26, "sha256": f"{position:064x}"}
+        for position in range(21)
+    ]
+    cases["twenty-one full certificates"] = too_many
+
+    terms = copy.deepcopy(base)
+    terms["confidential"]["checkpoint_on"] = "2027-07-21"
+    cases["checkpoint terms in the block"] = terms
 
     visibility = copy.deepcopy(base)
     visibility["confidential"]["run_visibility"] = "public"
@@ -350,6 +397,15 @@ def _mutations() -> dict[str, dict]:
     })
     cases["a public record rendered in the runs repository"] = confidential_render
 
+    restored = _public(base)
+    restored.pop("confidential")
+    restored["preservation"]["repositories"][0]["kind"] = "restored-from-bundle"
+    cases["a public record restored from a bundle"] = restored
+
+    unknown_kind = copy.deepcopy(base)
+    unknown_kind["preservation"]["repositories"][0]["kind"] = "mirror"
+    cases["an unknown preservation kind"] = unknown_kind
+
     unknown_repository = copy.deepcopy(base)
     unknown_repository["verification"]["repository"] = "PalomarRegistry/Elsewhere"
     cases["an unknown verifier repository"] = unknown_repository
@@ -384,6 +440,48 @@ def test_the_consistency_checks_bind_the_block_to_the_runs_repository():
     record = _public(synthetic_confidential_record())
     errors = entry_consistency_errors("extra", record)
     assert any("confidential: must be present exactly" in error for error in errors), errors
+
+
+@pytest.mark.parametrize("version", [3, 4, 5])
+def test_kind_is_refused_below_v6(version):
+    schema = _schema(version)
+    row = schema["properties"]["preservation"]["properties"]["repositories"]["items"]
+    assert row["additionalProperties"] is False and "kind" not in row["properties"]
+    record = _public(synthetic_confidential_record())
+    record.pop("confidential")
+    record["schema_version"] = version
+    if version < 5:
+        return  # The v3/v4 provenance shape differs; the closed row is what matters.
+    validator = jsonschema.Draft202012Validator(schema)
+    assert validator.is_valid(record)
+    record["preservation"]["repositories"][1]["kind"] = "fork"
+    assert not validator.is_valid(record)
+
+
+def test_a_public_v6_record_may_label_its_forks():
+    record = _public(synthetic_confidential_record())
+    record.pop("confidential")
+    for row in record["preservation"]["repositories"]:
+        row["kind"] = "fork"
+    assert _schema_errors(record) == []
+    assert entry_consistency_errors("forks", record) == []
+
+
+def test_the_consistency_checks_refuse_a_restored_public_record():
+    record = _public(synthetic_confidential_record())
+    record.pop("confidential")
+    record["preservation"]["repositories"][0]["kind"] = "restored-from-bundle"
+    errors = entry_consistency_errors("restored", record)
+    assert any("restored from a bundle" in error for error in errors), errors
+
+
+@pytest.mark.parametrize("field", ["id", "sha256"])
+def test_full_certificates_are_distinct(field):
+    record = synthetic_confidential_record()
+    certificates = record["confidential"]["full_certificates"]
+    certificates[1][field] = certificates[0][field]
+    errors = entry_consistency_errors("duplicate", record)
+    assert any(f"full_certificates: {field} is duplicated" in error for error in errors), errors
 
 
 def test_the_run_url_is_derived_from_the_runs_repository():
@@ -447,6 +545,27 @@ def test_the_report_must_name_the_caller_and_the_called_pipeline(repo):
     assert any("disagrees on pipeline_commit" in error for error in errors), errors
 
 
+def test_the_report_must_name_the_verified_snapshot(repo):
+    identifier = repo.next_identifier()
+    repo.install_entry(repo.confidential(repo.entry_data(identifier, 1)))
+    stored = repo.read_json(f"entries/{identifier}-v1.json")
+    stored["confidential"]["snapshot_sha256"] = "9" * 64
+    repo.write_json(f"entries/{identifier}-v1.json", stored)
+    errors = validate.validate(repo.path)
+    assert any("disagrees on snapshot_sha256" in error for error in errors), errors
+
+
+def test_the_summary_row_carries_the_restored_kind():
+    import build_recent
+
+    record = synthetic_confidential_record()
+    record["published_at"] = record["registered_at"]
+    summary = build_recent._source_preservation(record)
+    assert summary["repositories"][0]["kind"] == "restored-from-bundle"
+    public = _public(synthetic_confidential_record())
+    assert "kind" not in build_recent._source_preservation(public)["repositories"][0]
+
+
 def test_the_hold_precedes_the_release():
     record = synthetic_confidential_record()
     record["confidential"]["held_at"] = "2026-11-27T00:00:00Z"
@@ -493,6 +612,9 @@ def test_a_confidential_record_publishes(repo, served):
     assert (site / "schema-v6.json").is_file()
     published = json.loads((site / f"entries/{identifier}-v1.json").read_text())
     assert published["confidential"]["run_visibility"] == "private"
+    recent = json.loads((site / "recent.json").read_text())
+    card = next(item for item in recent["entries"] if item["id"] == identifier)
+    assert card["preservation"]["repositories"][0]["kind"] == "restored-from-bundle"
 
 
 if __name__ == "__main__":

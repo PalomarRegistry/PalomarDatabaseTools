@@ -118,6 +118,30 @@ def test_the_canonical_bundle_passes_without_mutating_its_entry(db):
     assert entry == before
 
 
+@pytest.mark.parametrize("suffix", [".ttf", ".woff", ".woff2"])
+def test_katex_fonts_in_every_emitted_format_are_accepted(db, suffix):
+    # Verso v4.36.0 writes KaTeX's fonts to katex/fonts/ as .ttf, .woff and
+    # .woff2 (PalomarSubmission issue 203).
+    entry = db.entry_data("PALOMAR-2026-07-29-000001", 1)
+    bundle = db.path / entry["challenge_render"]["artifact_path"]
+    font = bundle / "katex" / "fonts" / f"KaTeX_AMS-Regular{suffix}"
+    font.parent.mkdir(parents=True)
+    font.write_bytes(b"\x00\x01\x00\x00font")
+    _rehash_bundle(db, entry)
+
+    assert render_validation.validate_render(db.path, entry, "entry.json") == []
+
+
+def test_unlisted_artifact_extensions_are_rejected(db):
+    entry = db.entry_data("PALOMAR-2026-07-29-000001", 1)
+    bundle = db.path / entry["challenge_render"]["artifact_path"]
+    (bundle / "attack.svg").write_text("<svg><script>attack()</script></svg>")
+    _rehash_bundle(db, entry)
+
+    errors = render_validation.validate_render(db.path, entry, "entry.json")
+    assert any("disallowed artifact extension: attack.svg" in error for error in errors), errors
+
+
 def test_artifact_path_is_bound_before_the_bundle_is_read(db):
     entry = db.entry_data("PALOMAR-2026-07-29-000001", 1)
     tree_hash = entry["challenge_render"]["artifact_tree_sha256"]

@@ -30,7 +30,9 @@ import mimetypes
 import os
 import pathlib
 import re
-from typing import Any
+import time
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from typing import Any, Callable, Iterable
 
 POINTER_KEY = "_current.json"
 BUCKET_DEFAULT = "palomar-public-data"
@@ -78,6 +80,25 @@ ALWAYS_WRITTEN = (
     "browse/index.json",
 )
 LAUNCH_MARKER = ".palomar-launched"
+# A full rebuild offers every object in the registry, and each one costs a write
+# and a readback. One at a time that was about half a second an object and over
+# five hours for the whole registry, within reach of the six hours a GitHub job
+# may run. A full rebuild therefore keeps this many objects in flight. An
+# incremental release writes a handful and stays strictly serial.
+DEFAULT_CONCURRENCY = 16
+MAX_CONCURRENCY = 64
+# A full rebuild makes tens of thousands of requests, so one dropped connection
+# or 503 among them is expected rather than exceptional, and it would otherwise
+# throw away hours of verified work. Only failures that say nothing about the
+# object are retried. A refused conditional write is not a failure at all, and a
+# readback that disagrees is never retried: that is the check doing its job.
+TRANSFER_ATTEMPTS = 5
+TRANSFER_BACKOFF_SECONDS = 0.5
+TRANSIENT_CODES = frozenset({
+    "408", "429", "500", "502", "503", "504",
+    "InternalError", "RequestTimeout", "ServiceUnavailable", "SlowDown",
+    "TooManyRequests",
+})
 import release_delta
 
 MANIFEST_PATH = release_delta.DELTA_PATH
@@ -499,6 +520,136 @@ def _verify(client: Any, bucket: str, key: str, expected: bytes, digest: str) ->
         raise RuntimeError(f"R2 readback verification failed: {key}")
 
 
+def _transient(error: BaseException) -> bool:
+    """Whether a failed request says nothing about the object it was for."""
+    if isinstance(error, (ConnectionError, TimeoutError)):
+        return True
+    try:
+        from botocore import exceptions as botocore_errors
+    except ImportError:  # pragma: no cover - boto3 is a runtime requirement
+        botocore_errors = None
+    if botocore_errors is not None and isinstance(
+        error,
+        (
+            botocore_errors.ConnectionError,
+            botocore_errors.HTTPClientError,
+            botocore_errors.IncompleteReadError,
+        ),
+    ):
+        return True
+    if _error_code(error) in TRANSIENT_CODES:
+        return True
+    response = getattr(error, "response", None)
+    status = (
+        (response.get("ResponseMetadata") or {}).get("HTTPStatusCode")
+        if isinstance(response, dict)
+        else None
+    )
+    return str(status) in TRANSIENT_CODES
+
+
+def _retrying(operation: Callable[[], Any], what: str) -> Any:
+    """Run one idempotent request, retrying only transient failures.
+
+    Both requests this wraps are safe to repeat. An ordinary put rewrites the
+    same bytes. A create-only put whose first attempt landed but whose answer
+    was lost is refused on the retry, which `_put_object` reports as "already
+    there", and the readback that always follows it settles the bytes.
+    """
+    for attempt in range(1, TRANSFER_ATTEMPTS + 1):
+        try:
+            return operation()
+        except Exception as error:  # noqa: BLE001 - classified just below
+            if not _transient(error) or attempt == TRANSFER_ATTEMPTS:
+                raise
+            delay = TRANSFER_BACKOFF_SECONDS * 2 ** (attempt - 1)
+            print(
+                f"{what}: attempt {attempt} of {TRANSFER_ATTEMPTS} failed ({error!r}); "
+                f"retrying in {delay:g}s",
+                flush=True,
+            )
+            time.sleep(delay)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def _upload(
+    client: Any,
+    bucket: str,
+    site: pathlib.Path,
+    key: str,
+    relative: str,
+    digest: str,
+    *,
+    create_only: bool,
+    retry: bool,
+) -> bool:
+    """Write one staged object and read it back. Returns whether it was created.
+
+    The bytes live for this one round trip and no longer, whichever thread
+    runs it, so a publication holds at most one object per request in flight.
+    """
+    data = _staged_bytes(site, relative, digest)
+    if not retry:
+        created = _put_object(
+            client, bucket, key, data, digest, relative, create_only=create_only
+        )
+        _verify(client, bucket, key, data, digest)
+        return created
+    created = _retrying(
+        lambda: _put_object(
+            client, bucket, key, data, digest, relative, create_only=create_only
+        ),
+        f"writing {key}",
+    )
+    _retrying(lambda: _verify(client, bucket, key, data, digest), f"reading back {key}")
+    return created
+
+
+def _bounded(tasks: Iterable[Callable[[], Any]], concurrency: int) -> list[Any]:
+    """Run every task with at most `concurrency` in flight, and return only
+    once none is still running.
+
+    That last part is the whole contract. The caller writes the next stage,
+    and eventually the pointer, after this returns, so every task this
+    started has finished and been accounted for by then -- including when one
+    of them failed. A failure stops anything new from starting, waits for the
+    tasks already in flight, and then raises the first error, so nothing
+    after this call runs and nothing started here is still writing when the
+    exception reaches the caller.
+
+    Tasks are submitted as earlier ones finish, not all at once, so nothing is
+    left queued behind a failure and nothing but the in-flight tasks holds
+    any bytes.
+    """
+    if concurrency == 1:
+        return [task() for task in tasks]
+    results: list[Any] = []
+    failure: BaseException | None = None
+    remaining = iter(tasks)
+    with ThreadPoolExecutor(
+        max_workers=concurrency, thread_name_prefix="publish"
+    ) as pool:
+        running: set[Any] = set()
+        while True:
+            while failure is None and len(running) < concurrency:
+                task = next(remaining, None)
+                if task is None:
+                    break
+                running.add(pool.submit(task))
+            if not running:
+                break
+            finished, running = wait(running, return_when=FIRST_COMPLETED)
+            for future in finished:
+                try:
+                    results.append(future.result())
+                except BaseException as error:  # noqa: BLE001 - re-raised below
+                    if failure is None:
+                        failure = error
+    if failure is not None:
+        raise failure
+    return results
+
+
 def _delete_keys(client: Any, bucket: str, keys: list[str]) -> None:
     """Delete, and insist that it happened.
 
@@ -809,7 +960,10 @@ def publish_snapshot(
     database: pathlib.Path | None = None,
     record_replacements: pathlib.Path | None = None,
     query_api: str | None = None,
+    concurrency: int = DEFAULT_CONCURRENCY,
 ) -> str:
+    if not 1 <= concurrency <= MAX_CONCURRENCY:
+        raise ValueError(f"concurrency must be between 1 and {MAX_CONCURRENCY}")
     launched = _launched(database) if database is not None else True
     _assert_conditional_writes(client, bucket)
     release, delta, staged = _staged_objects(site.resolve())
@@ -922,39 +1076,73 @@ def publish_snapshot(
             existing, staged_keys, tombstoned, authorized=authorized
         )
 
-    # Written and read back one at a time, so that a publication holds one
-    # object rather than the whole release. The readback is not deferred to a
-    # second pass any more: keeping the bytes to compare against later is
-    # exactly the thing that made memory grow with the dataset.
-    created = 0
+    # Each object is written and read back by the same task, so a publication
+    # holds at most one object per request in flight rather than the whole
+    # release. The readback is not deferred to a second pass: keeping the
+    # bytes to compare against later is exactly what made memory grow with
+    # the dataset.
+    #
+    # A full rebuild runs those tasks concurrently, but only inside a stage
+    # whose order nothing depends on, and `_bounded` returns only when every
+    # task in a stage has been verified. Everything that needs an order -- the
+    # dependency ranks of stable pages, the base and the delta last among the
+    # release objects, the record replacements, the query activation, the
+    # withdrawals and finally the pointer -- is still a sequence of stages, so
+    # the pointer is written strictly after every object is verified and any
+    # failure stops before it. An incremental release stays serial and
+    # unretried, exactly as it was.
+    workers = 1 if incremental else concurrency
+    retry = not incremental
+
+    def upload(key: str, relative: str, digest: str, *, create_only: bool):
+        return lambda: _upload(
+            client, bucket, site, key, relative, digest,
+            create_only=create_only, retry=retry,
+        )
+
     ordinary = [row for row in write if row[0] not in replacements]
     replacing = [row for row in write if row[0] in replacements]
-    for relative, digest in ordinary:
-        data = _staged_bytes(site, relative, digest)
-        key = f"{PUBLIC_PREFIX}{relative}"
-        if _put_object(client, bucket, key, data, digest, relative, create_only=True):
-            created += 1
-        # Created or refused. The refused ones are the reason: R2 kept whatever
-        # is there, and this is where a publication finds out whether what is
-        # there is what this release says should be.
-        _verify(client, bucket, key, data, digest)
+    # Created or refused. The refused ones are the reason for the readback: R2
+    # kept whatever is there, and this is where a publication finds out
+    # whether what is there is what this release says should be. Immutable
+    # records have no order among themselves; nothing names one until the
+    # pages above it are written.
+    created = sum(
+        _bounded(
+            (
+                upload(f"{PUBLIC_PREFIX}{relative}", relative, digest, create_only=True)
+                for relative, digest in ordinary
+            ),
+            workers,
+        )
+    )
 
     # New records are now readable. Full uploads remain invisible until finish;
     # ordinary uploads expose one complete, retry-safe result at a time.
     if query is not None:
         query.upload(site)
 
-    for relative, digest in rewrite:
-        data = _staged_bytes(site, relative, digest)
-        key = f"{PUBLIC_PREFIX}{relative}"
-        _put_object(client, bucket, key, data, digest, relative)
-        _verify(client, bucket, key, data, digest)
+    # One stage per dependency rank, lowest first. Pages within a rank name
+    # nothing else in it, so they may land in any order, but no document of a
+    # higher rank is offered until every page below it has been read back.
+    for rank in sorted({_rank(relative) for relative, _digest in rewrite}):
+        _bounded(
+            (
+                upload(f"{PUBLIC_PREFIX}{relative}", relative, digest, create_only=False)
+                for relative, digest in rewrite
+                if _rank(relative) == rank
+            ),
+            workers,
+        )
 
-    for relative, digest, _kind in snapshot:
-        data = _staged_bytes(site, relative, digest)
-        key = f"{SNAPSHOT_PREFIX}{release}/{relative}"
-        _put_object(client, bucket, key, data, digest, relative)
-        _verify(client, bucket, key, data, digest)
+    # Release-keyed, so invisible to every reader until the pointer names them.
+    _bounded(
+        (
+            upload(f"{SNAPSHOT_PREFIX}{release}/{relative}", relative, digest, create_only=False)
+            for relative, digest, _kind in snapshot
+        ),
+        workers,
+    )
     publication_base = release_delta.base_of(delta)
     base_bytes = release_delta.canonical_base_bytes(publication_base)
     base_digest = release_delta.base_id(publication_base)
@@ -1180,7 +1368,17 @@ def main() -> int:
     )
     parser.add_argument("--bucket", default=os.environ.get("R2_BUCKET", BUCKET_DEFAULT))
     parser.add_argument("--query-api", help="also update the query index through this HTTPS origin")
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=int(os.environ.get("PALOMAR_PUBLISH_CONCURRENCY", DEFAULT_CONCURRENCY)),
+        help="how many objects a full rebuild writes and reads back at once "
+        f"(1 to {MAX_CONCURRENCY}, default {DEFAULT_CONCURRENCY}); an incremental "
+        "release is always serial",
+    )
     args = parser.parse_args()
+    if not 1 <= args.concurrency <= MAX_CONCURRENCY:
+        parser.error(f"--concurrency must be between 1 and {MAX_CONCURRENCY}")
     reading_only = (
         args.audit or args.write_current_base is not None or args.fetch_prior is not None
     )
@@ -1200,6 +1398,7 @@ def main() -> int:
             "CLOUDFLARE_ACCOUNT_ID, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY are required"
         )
     import boto3
+    from botocore.config import Config
 
     client = boto3.client(
         "s3",
@@ -1207,6 +1406,9 @@ def main() -> int:
         aws_access_key_id=access_key,
         aws_secret_access_key=secret_key,
         region_name="auto",
+        # One pooled connection per request in flight. The default pool of
+        # ten would make the rest open and discard a connection each time.
+        config=Config(max_pool_connections=max(10, args.concurrency)),
     )
     if args.write_current_base is not None:
         # The staging run needs to know what is already published so it can
@@ -1282,6 +1484,7 @@ def main() -> int:
         args.database,
         args.record_replacements,
         args.query_api,
+        args.concurrency,
     )
     print(f"published release {release}")
     return 0

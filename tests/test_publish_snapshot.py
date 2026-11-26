@@ -1479,8 +1479,13 @@ def test_a_publication_holds_one_object_at_a_time(tmp_path, monkeypatch):
         lambda *a, **k: (events.append("verify"), verify(*a, **k))[1],
     )
     client = MemoryR2()
+    # Serial, so that "one at a time" can be read off the order of events. The
+    # concurrent bound is `test_a_full_rebuild_holds_one_object_per_request_in_flight`.
     publish_snapshot(
-        client, "bucket", build_site(tmp_path, "one", [_identifier(n) for n in range(1, 6)])
+        client,
+        "bucket",
+        build_site(tmp_path, "one", [_identifier(n) for n in range(1, 6)]),
+        concurrency=1,
     )
 
     assert events.count("read") > 5, "nothing was read"
@@ -1737,3 +1742,429 @@ def test_query_activation_precedes_withdrawal_and_retries_after_failure(tmp_path
     fail = False
     publish_snapshot(client, "bucket", site, query_api="https://data.example.test")
     assert events == ["upload", "finish", "upload", "finish", "collect"]
+
+
+# Concurrent full rebuilds. A full rebuild offers every object in the registry,
+# and one at a time that came to over five hours. It now keeps several objects
+# in flight, and everything below is about what that must not change: the
+# pointer still moves only after every object is verified, any failure still
+# leaves it where it was, and the order readers depend on still holds.
+
+
+class SlowR2(MemoryR2):
+    """A MemoryR2 that takes long enough per request for requests to overlap,
+    counts how many are in flight at once, and fails on request."""
+
+    def __init__(self, delay: float = 0.002, **options):
+        super().__init__(**options)
+        import threading
+
+        self.lock = threading.Lock()
+        self.delay = delay
+        self.in_flight = 0
+        self.most_in_flight = 0
+        self.events: list[tuple[str, str]] = []
+        self.calls: dict[tuple[str, str], int] = {}
+        # (operation, key) -> exceptions to raise, one per call, before the
+        # request is allowed through.
+        self.failures: dict[tuple[str, str], list[BaseException]] = {}
+        # Keys whose put lands and whose answer is then lost.
+        self.lost_answers: set[str] = set()
+        # Keys whose readback returns other bytes.
+        self.corrupt: set[str] = set()
+
+    def _enter(self, operation: str, key: str) -> None:
+        with self.lock:
+            self.calls[(operation, key)] = self.calls.get((operation, key), 0) + 1
+            self.events.append((f"{operation}-start", key))
+            self.in_flight += 1
+            self.most_in_flight = max(self.most_in_flight, self.in_flight)
+            pending = self.failures.get((operation, key))
+            failure = pending.pop(0) if pending else None
+        if failure is None:
+            import time
+
+            time.sleep(self.delay)
+        return failure
+
+    def _leave(self, operation: str, key: str) -> None:
+        with self.lock:
+            self.in_flight -= 1
+            self.events.append((f"{operation}-end", key))
+
+    def put_object(self, *, Bucket, Key, **arguments):
+        failure = self._enter("put", Key)
+        try:
+            if failure is not None:
+                raise failure
+            with self.lock:
+                super().put_object(Bucket=Bucket, Key=Key, **arguments)
+            if Key in self.lost_answers:
+                self.lost_answers.discard(Key)
+                raise TimeoutError("the answer was lost")
+        finally:
+            self._leave("put", Key)
+
+    def get_object(self, *, Bucket, Key):
+        failure = self._enter("get", Key)
+        try:
+            if failure is not None:
+                raise failure
+            with self.lock:
+                response = super().get_object(Bucket=Bucket, Key=Key)
+            if Key in self.corrupt:
+                response["Body"] = io.BytesIO(b"not what was written\n")
+            return response
+        finally:
+            self._leave("get", Key)
+
+    def puts(self, prefix: str = "") -> list[str]:
+        return [key for event, key in self.events if event == "put-start" and key.startswith(prefix)]
+
+
+class Unavailable(Exception):
+    """What R2 answers when it is briefly overloaded."""
+
+    response = {"Error": {"Code": "ServiceUnavailable"}, "ResponseMetadata": {"HTTPStatusCode": 503}}
+
+
+class Denied(Exception):
+    """A refusal that says something about the request, so must not be retried."""
+
+    response = {"Error": {"Code": "AccessDenied"}, "ResponseMetadata": {"HTTPStatusCode": 403}}
+
+
+@pytest.fixture
+def no_backoff(monkeypatch):
+    import publish_snapshot as publisher
+
+    monkeypatch.setattr(publisher, "TRANSFER_BACKOFF_SECONDS", 0.0)
+
+
+def _pointer(client) -> bytes:
+    return client.objects[POINTER_KEY]["Body"]
+
+
+def _published_then_rebuilt(tmp_path, client, entries=8, **site):
+    """Publish one release, then stage a full rebuild with one more record."""
+    identifiers = [_identifier(n) for n in range(1, entries + 1)]
+    publish_snapshot(client, "bucket", build_site(tmp_path, "one", identifiers))
+    before = _pointer(client)
+    if isinstance(client, SlowR2):
+        client.events.clear()
+        client.calls.clear()
+    new = _identifier(entries + 1)
+    rebuilt = build_site(tmp_path, "two", identifiers + [new], **site)
+    return before, new, rebuilt
+
+
+def _release_of(site: pathlib.Path) -> str:
+    return release_delta.release_id(
+        release_delta.parse((site / "release-delta.json").read_bytes())
+    )
+
+
+def test_a_full_rebuild_writes_objects_concurrently_within_the_bound(tmp_path):
+    client = SlowR2()
+    site = build_site(tmp_path, "one", [_identifier(n) for n in range(1, 25)])
+    publish_snapshot(client, "bucket", site, concurrency=6)
+
+    assert 1 < client.most_in_flight <= 6, client.most_in_flight
+    assert client.put_order[-1] == POINTER_KEY
+
+
+def test_a_full_rebuild_holds_one_object_per_request_in_flight(tmp_path, monkeypatch):
+    """The memory bound survives concurrency: at most one staged object per
+    task in flight, each released after its own readback."""
+    import threading
+
+    import publish_snapshot as publisher
+
+    lock = threading.Lock()
+    live = {"now": 0, "most": 0}
+    upload = publisher._upload
+
+    def counted(*arguments, **options):
+        with lock:
+            live["now"] += 1
+            live["most"] = max(live["most"], live["now"])
+        try:
+            return upload(*arguments, **options)
+        finally:
+            with lock:
+                live["now"] -= 1
+
+    monkeypatch.setattr(publisher, "_upload", counted)
+    site = build_site(tmp_path, "one", [_identifier(n) for n in range(1, 25)])
+    publish_snapshot(SlowR2(), "bucket", site, concurrency=4)
+
+    assert 1 < live["most"] <= 4, live
+
+
+def test_the_pointer_is_written_only_after_every_object_is_verified(tmp_path):
+    client = SlowR2()
+    site = build_site(tmp_path, "one", [_identifier(n) for n in range(1, 25)])
+    release = publish_snapshot(client, "bucket", site, concurrency=8)
+
+    pointer_write = client.events.index(("put-start", POINTER_KEY))
+    delta_key = f"snapshots/{release}/release-delta.json"
+    before = client.events[:pointer_write]
+    # Every object the release names was written and read back first.
+    for key in {key for event, key in client.events if event == "put-start"} - {
+        POINTER_KEY,
+        "internal/conditional-write",
+    }:
+        assert ("put-end", key) in before, key
+        assert ("get-end", key) in before, key
+    # Nothing was still in flight when the pointer was offered.
+    started = sum(1 for event, _ in before if event.endswith("-start"))
+    ended = sum(1 for event, _ in before if event.endswith("-end"))
+    assert started == ended
+    # And the delta is still the last release object, after every aggregate.
+    last_release_object = max(
+        index
+        for index, (event, key) in enumerate(before)
+        if event == "put-start" and key.startswith(f"snapshots/{release}/")
+    )
+    assert before[last_release_object] == ("put-start", delta_key)
+
+
+def test_dependency_ranks_are_still_written_in_order(tmp_path):
+    """Pages within a rank may land in any order, but no head or year
+    document is offered until every page below it has been read back."""
+    client = SlowR2()
+    site = build_site(tmp_path, "one", [_identifier(n) for n in range(1, 25)], categories=6)
+    stage_stable_documents(
+        site,
+        [
+            "subjects/msc/11A05/2026-08-07/1.json",
+            "subjects/msc/11A05/2026.json",
+            "subjects/msc/11A05.json",
+            "search/t/ring/1.json",
+            "search/t/ring/head.json",
+        ],
+    )
+    publish_snapshot(client, "bucket", site, concurrency=8)
+
+    def at(event, key):
+        return client.events.index((event, key))
+
+    stable = [key for key in client.puts("public/") if classify(key[len("public/"):]) == "stable"]
+    for higher in stable:
+        for lower in stable:
+            if _rank(lower) < _rank(higher):
+                assert at("get-end", lower) < at("put-start", higher), (lower, higher)
+
+
+def test_a_failed_record_write_leaves_the_pointer_where_it_was(tmp_path):
+    client = SlowR2()
+    before, new, site = _published_then_rebuilt(tmp_path, client)
+    key = f"public/entries/{new}.json"
+    client.failures[("put", key)] = [Denied()]
+
+    with pytest.raises(Denied):
+        publish_snapshot(client, "bucket", site, concurrency=8)
+
+    assert _pointer(client) == before
+    assert client.calls[("put", key)] == 1, "a refusal is not retried"
+    release = _release_of(site)
+    assert not client.keys(f"snapshots/{release}/"), "no aggregate was written"
+    assert not client.puts("public/browse/"), "no page was offered after a record failed"
+    # Nothing was left running: every request started has finished.
+    started = sum(1 for event, _ in client.events if event.endswith("-start"))
+    ended = sum(1 for event, _ in client.events if event.endswith("-end"))
+    assert started == ended
+
+
+def test_a_failure_stops_new_work_from_starting(tmp_path):
+    """Up to `concurrency` requests may be in flight when one fails; nothing
+    after them is offered, and no later stage begins."""
+    client = SlowR2()
+    identifiers = [_identifier(n) for n in range(1, 41)]
+    site = build_site(tmp_path, "one", identifiers)
+    first = f"public/entries/{identifiers[0]}.json"
+    client.failures[("put", first)] = [Denied()]
+
+    with pytest.raises(Denied):
+        publish_snapshot(client, "bucket", site, concurrency=4)
+
+    records = client.puts("public/entries/") + client.puts("public/renders/") + client.puts(
+        "public/evidence/"
+    )
+    assert len(records) < 3 * len(identifiers) // 2, len(records)
+    assert not client.puts("public/browse/")
+    assert not client.puts("public/feed")
+    assert not client.puts("snapshots/")
+    assert POINTER_KEY not in client.objects
+
+
+def test_a_readback_that_disagrees_partway_leaves_the_pointer_and_higher_ranks(tmp_path):
+    """Records and lower-rank pages are already written when a page fails its
+    readback. That failure must not be retried away, and nothing that names
+    the page -- year documents, heads, the delta, the pointer -- is written."""
+    client = SlowR2()
+    before, new, site = _published_then_rebuilt(tmp_path, client)
+    page = f"public/browse/{_day(new)}/{_page(new)}.json"
+    client.corrupt.add(page)
+
+    with pytest.raises(RuntimeError, match="readback verification failed"):
+        publish_snapshot(client, "bucket", site, concurrency=8)
+
+    assert _pointer(client) == before
+    assert client.calls[("get", page)] == 1, "a disagreeing readback is not retried"
+    assert f"public/entries/{new}.json" in client.objects, "records were written first"
+    written = client.puts("public/")
+    assert "public/browse/index.json" not in written
+    assert f"public/browse/{_day(new)[:4]}.json" not in written
+    assert not client.keys(f"snapshots/{_release_of(site)}/")
+
+
+def test_a_failed_aggregate_leaves_the_pointer_and_writes_no_delta(tmp_path):
+    client = SlowR2()
+    before, _new, site = _published_then_rebuilt(tmp_path, client)
+    release = _release_of(site)
+    client.failures[("put", f"snapshots/{release}/LICENSE")] = [Denied()]
+
+    with pytest.raises(Denied):
+        publish_snapshot(client, "bucket", site, concurrency=8)
+
+    assert _pointer(client) == before
+    assert f"snapshots/{release}/release-delta.json" not in client.objects
+    assert f"snapshots/{release}/{release_delta.BASE_PATH}" not in client.objects
+
+
+def test_transient_failures_are_retried_and_the_release_completes(tmp_path, no_backoff):
+    from botocore.exceptions import EndpointConnectionError, ReadTimeoutError
+
+    client = SlowR2()
+    _before, new, site = _published_then_rebuilt(tmp_path, client)
+    entry = f"public/entries/{new}.json"
+    page = f"public/browse/{_day(new)}/{_page(new)}.json"
+    aggregate = f"snapshots/{_release_of(site)}/index.json"
+    client.failures[("put", entry)] = [Unavailable(), EndpointConnectionError(endpoint_url="r2")]
+    client.failures[("get", page)] = [ReadTimeoutError(endpoint_url="r2"), ConnectionResetError()]
+    client.failures[("put", aggregate)] = [Unavailable()]
+
+    release = publish_snapshot(client, "bucket", site, concurrency=8)
+
+    assert json.loads(_pointer(client))["release"] == release
+    assert client.calls[("put", entry)] == 3
+    assert client.calls[("get", page)] == 3
+    assert client.calls[("put", aggregate)] == 2
+
+
+def test_a_create_only_write_whose_answer_was_lost_is_settled_by_its_readback(
+    tmp_path, no_backoff
+):
+    """The retry of a write that actually landed is refused by R2, which is
+    not an error, and the readback proves the bytes are the release's."""
+    client = SlowR2()
+    _before, new, site = _published_then_rebuilt(tmp_path, client)
+    entry = f"public/entries/{new}.json"
+    client.lost_answers.add(entry)
+
+    release = publish_snapshot(client, "bucket", site, concurrency=8)
+
+    assert json.loads(_pointer(client))["release"] == release
+    assert client.calls[("put", entry)] == 2
+    assert entry in client.refused, "the retry was conditional and R2 refused it"
+    assert client.objects[entry]["Body"] == (site / "entries" / f"{new}.json").read_bytes()
+
+
+def test_transient_failures_that_persist_leave_the_pointer_where_it_was(tmp_path, no_backoff):
+    import publish_snapshot as publisher
+
+    client = SlowR2()
+    before, new, site = _published_then_rebuilt(tmp_path, client)
+    entry = f"public/entries/{new}.json"
+    client.failures[("put", entry)] = [Unavailable() for _ in range(publisher.TRANSFER_ATTEMPTS)]
+
+    with pytest.raises(Unavailable):
+        publish_snapshot(client, "bucket", site, concurrency=8)
+
+    assert client.calls[("put", entry)] == publisher.TRANSFER_ATTEMPTS
+    assert _pointer(client) == before
+    assert not client.keys(f"snapshots/{_release_of(site)}/")
+
+
+def test_a_failed_rebuild_can_be_retried_to_completion(tmp_path):
+    """What a failure leaves behind is exactly what a crash leaves: records
+    present and unattested, and a pointer that has not moved. Running the
+    same release again finishes it."""
+    client = SlowR2()
+    before, new, site = _published_then_rebuilt(tmp_path, client)
+    client.failures[("put", "public/browse/index.json")] = [Denied()]
+    with pytest.raises(Denied):
+        publish_snapshot(client, "bucket", site, concurrency=8)
+    assert _pointer(client) == before
+
+    release = publish_snapshot(client, "bucket", site, concurrency=8)
+    assert json.loads(_pointer(client))["release"] == release
+    assert f"public/entries/{new}.json" in client.refused
+
+
+def test_an_incremental_release_stays_serial_and_unretried(tmp_path):
+    client = SlowR2()
+    first, second = _identifier(1), _identifier(2)
+    publish_snapshot(client, "bucket", build_site(tmp_path, "one", [first]))
+    base = release_delta.parse(
+        client.objects[
+            f"snapshots/{json.loads(_pointer(client))['release']}/release-delta.json"
+        ]["Body"]
+    )
+    before = _pointer(client)
+    site = build_site(tmp_path, "two", [first, second])
+    _incremental(base, site, entries=[first, second], added=[second])
+
+    entry = f"public/entries/{second}.json"
+    client.failures[("put", entry)] = [Unavailable()]
+    client.most_in_flight = 0
+    with pytest.raises(Unavailable):
+        publish_snapshot(client, "bucket", site, concurrency=8)
+    assert client.calls[("put", entry)] == 1
+    assert _pointer(client) == before
+
+    release = publish_snapshot(client, "bucket", site, concurrency=8)
+    assert json.loads(_pointer(client))["release"] == release
+    assert client.most_in_flight == 1
+
+
+@pytest.mark.parametrize("concurrency", [0, -1, 65])
+def test_an_unreasonable_concurrency_is_refused_before_anything_is_written(
+    tmp_path, concurrency
+):
+    client = MemoryR2()
+    with pytest.raises(ValueError, match="concurrency"):
+        publish_snapshot(
+            client, "bucket", build_site(tmp_path, "one", [_identifier(1)]),
+            concurrency=concurrency,
+        )
+    assert not client.objects
+
+
+def test_the_command_line_passes_its_concurrency_through(monkeypatch, tmp_path):
+    import publish_snapshot as publisher
+
+    seen = {}
+    monkeypatch.chdir(tmp_path)
+    for name in ("CLOUDFLARE_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"):
+        monkeypatch.setenv(name, "x")
+
+    class Boto:
+        def client(self, *_a, **options):
+            seen["pool"] = options["config"].max_pool_connections
+            return object()
+
+    def publish(*arguments):
+        seen["concurrency"] = arguments[-1]
+        return "0" * 64
+
+    monkeypatch.setitem(__import__("sys").modules, "boto3", Boto())
+    monkeypatch.setattr(publisher, "publish_snapshot", publish)
+    monkeypatch.setattr("sys.argv", ["publish_snapshot.py", "--site", "s", "--concurrency", "32"])
+    assert publisher.main() == 0
+    assert seen == {"pool": 32, "concurrency": 32}
+
+    monkeypatch.setattr("sys.argv", ["publish_snapshot.py", "--site", "s", "--concurrency", "0"])
+    with pytest.raises(SystemExit):
+        publisher.main()

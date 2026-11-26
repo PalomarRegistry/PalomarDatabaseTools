@@ -35,6 +35,7 @@ ALLOWED_RENDER_EXTENSIONS = frozenset(
         ".md",
         ".png",
         ".ts",
+        ".ttf",
         ".txt",
         ".webp",
         ".woff",

@@ -80,6 +80,7 @@ def test_a_full_rebuild_is_the_answer_to_every_uncertainty(db, tmp_path):
         "tooling.lock.json",
         ".github/workflows/publish.yml",
         "tools/check_web_compatibility.py",
+        "tools/install_public_tooling.py",
         "tools/validate.py",
         "tools/validation_scope.py",
     ],
@@ -97,6 +98,31 @@ def test_orchestration_only_changes_do_not_rewrite_the_registry(
 
     assert current["parent"] == release_delta.release_id(previous)
     assert current["database_commit"] != base
+
+
+@pytest.mark.parametrize(
+    "publication_input",
+    [
+        "tools/takedowns.py",
+        "tools/release_delta.py",
+        "tools/some_new_module.py",
+        "requirements-tools.txt",
+    ],
+)
+def test_a_change_that_may_reach_published_bytes_still_rebuilds(
+    repo, tmp_path, publication_input
+):
+    """Only the named orchestration files are exempt. Anything else under
+    `tools/`, including a module nobody has classified yet, still rebuilds."""
+    repo.commit("the served database revision")
+    previous = _delta(repo, tmp_path, "input-base")
+    repo.write(publication_input, "publication input changed\n")
+    repo.add_entry(SECOND, 1)
+    repo.commit("accept one result with a publication input change")
+
+    current = _delta(repo, tmp_path, "input-next", previous=previous)
+
+    assert current["parent"] is None
 
 
 def test_an_unknown_parent_commit_rebuilds_rather_than_guessing(db, tmp_path, capsys):

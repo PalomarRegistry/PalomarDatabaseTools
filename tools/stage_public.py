@@ -58,6 +58,11 @@ NON_PUBLICATION_INPUTS = frozenset({
     "tooling.lock.json",
     ".github/workflows/publish.yml",
     "tools/check_web_compatibility.py",
+    # Fetches and verifies the wheel `tooling.lock.json` pins and nothing else.
+    # The pin decides which tooling stages a release, and moving it already
+    # publishes incrementally; how the pinned bytes are downloaded cannot
+    # change a single published byte.
+    "tools/install_public_tooling.py",
     "tools/validate.py",
     "tools/validation_scope.py",
 })
